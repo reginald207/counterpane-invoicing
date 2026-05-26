@@ -215,12 +215,17 @@ textarea { resize: vertical; }
 
 /* ─── SIDEBAR ─────────────────────────────────────────── */
 .sidebar {
-  width: var(--sidebar-w); min-height: 100vh;
+  width: var(--sidebar-w);
+  /* height: 100vh keeps the sidebar exactly the viewport height so the
+     footer is ALWAYS visible regardless of zoom level or nav item count.
+     overflow: hidden on the sidebar + overflow-y: auto on .sidebar-nav
+     means only the nav section scrolls — the footer never disappears. */
+  height: 100vh;
   background: var(--green-800);
   display: flex; flex-direction: column;
   position: fixed; top: 0; left: 0; z-index: 100;
   transition: transform .25s ease, width var(--t);
-  overflow-y: auto; overflow-x: hidden;
+  overflow: hidden;
 }
 .sidebar-top {
   display: flex; align-items: center; justify-content: space-between;
@@ -239,7 +244,13 @@ textarea { resize: vertical; }
 .brand-sub  { display: block; font-size: 11px; color: rgba(255,255,255,.35); white-space: nowrap; }
 .sidebar-close-btn { color: rgba(255,255,255,.4); font-size: 18px; padding: 4px; transition: color var(--t); flex-shrink: 0; display: none; }
 .sidebar-close-btn:hover { color: white; }
-.sidebar-nav { flex: 1; padding: 12px 8px; overflow-y: auto; }
+.sidebar-nav {
+  flex: 1;           /* takes all remaining space between top and footer */
+  padding: 12px 8px;
+  overflow-y: auto;  /* scroll within the nav if items overflow */
+  overflow-x: hidden;
+  min-height: 0;     /* required for flex children to shrink below content size */
+}
 .sidebar-nav::-webkit-scrollbar { width: 0; }
 .nav-group { margin-bottom: 18px; }
 .nav-label { display: block; font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,.28); padding: 0 10px; margin-bottom: 4px; }
@@ -255,7 +266,9 @@ textarea { resize: vertical; }
 .nav-item.active { background: rgba(34,197,94,.15); color: var(--green-500); }
 .sidebar-footer {
   display: flex; align-items: center; gap: 8px; padding: 14px;
-  border-top: 1px solid rgba(255,255,255,.06); flex-shrink: 0;
+  border-top: 1px solid rgba(255,255,255,.06);
+  flex-shrink: 0; /* never compress — always visible at bottom */
+  min-height: 0;
 }
 .user-chip { display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden; min-width: 0; }
 .user-avatar { width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%; background: var(--green-600); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: white; }
