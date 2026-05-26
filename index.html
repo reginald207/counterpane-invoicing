@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Counterpane — Invoicing System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- APP LOADER (shown while Firebase resolves auth state) -->
+<div id="appLoader" class="app-loader">
+  <div class="app-loader-inner">
+    <div class="app-loader-icon"><i class="fa-solid fa-layer-group"></i></div>
+    <p class="app-loader-name">Counterpane</p>
+    <p class="app-loader-sub">Loading your workspace…</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ LOGIN ═══════════════════════════════ -->
+<section id="loginPage" class="page-login" style="display:none">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="login-logo"><i class="fa-solid fa-layer-group"></i></div>
+      <h1>Counterpane</h1>
+      <p>Invoicing &amp; Client Management</p>
+    </div>
+    <form id="loginForm" novalidate>
+      <div class="field-group">
+        <label for="loginEmail">Email Address</label>
+        <div class="input-wrap">
+          <!-- <i class="fa-solid fa-envelope"></i> -->
+          <input type="email" id="loginEmail" placeholder="you@company.com" required autocomplete="email" />
+        </div>
+      </div>
+      <div class="field-group">
+        <label for="loginPassword">Password</label>
+        <div class="input-wrap">
+          <!-- <i class="fa-solid fa-lock"></i> -->
+          <input type="password" id="loginPassword" placeholder="Enter your password" required autocomplete="current-password" />
+          <button type="button" class="toggle-pw" id="togglePw" tabindex="-1"><i class="fa-solid fa-eye"></i></button>
+        </div>
+      </div>
+      <div id="loginError" class="form-error hide"></div>
+      <button type="submit" class="btn-primary full" id="loginBtn">
+        <span>Sign In</span><i class="fa-solid fa-arrow-right"></i>
+      </button>
+    </form>
+    <p class="login-note"><i class="fa-solid fa-shield-halved"></i> Access is by invitation only. Contact your administrator.</p>
+  </div>
+</section>
+<!-- Overlay for mobile sidebar -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<div class="sidebar-overlay" id="clientSidebarOverlay"></div>
+
+<!-- ═══════════════════════════════ ADMIN SHELL ═══════════════════════════════ -->
+<div id="adminShell" class="app-shell hide">
+
+  <aside class="sidebar" id="adminSidebar">
+    <div class="sidebar-top">
+      <div class="sidebar-brand">
+        <div class="brand-icon"><i class="fa-solid fa-layer-group"></i></div>
+        <div class="brand-text">
+          <span class="brand-name">Counterpane</span>
+          <span class="brand-sub">Admin Portal</span>
+        </div>
+      </div>
+      <button class="sidebar-close-btn" id="sidebarCloseBtn" title="Close menu"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-group">
+        <span class="nav-label">Overview</span>
+        <a href="#" class="nav-item active" data-page="adminDashboardPage" data-tooltip="Dashboard"><i class="fa-solid fa-chart-pie"></i><span>Dashboard</span></a>
+      </div>
+      <div class="nav-group">
+        <span class="nav-label">Management</span>
+        <a href="#" class="nav-item" data-page="clientsPage" data-tooltip="Clients"><i class="fa-solid fa-building"></i><span>Clients</span></a>
+        <a href="#" class="nav-item" data-page="servicesPage" data-tooltip="Services"><i class="fa-solid fa-briefcase"></i><span>Services</span></a>
+        <a href="#" class="nav-item" data-page="projectsPage" data-tooltip="Projects"><i class="fa-solid fa-folder-open"></i><span>Projects</span></a>
+      </div>
+      <div class="nav-group">
+        <span class="nav-label">Finance</span>
+        <a href="#" class="nav-item" data-page="invoicesPage" data-tooltip="Invoices"><i class="fa-solid fa-file-invoice"></i><span>Invoices</span></a>
+        <a href="#" class="nav-item" data-page="receiptsPage" data-tooltip="Receipts"><i class="fa-solid fa-receipt"></i><span>Receipts</span></a>
+        <a href="#" class="nav-item" data-page="quotesPage" data-tooltip="Quotes"><i class="fa-solid fa-file-contract"></i><span>Quotes</span></a>
+        <a href="#" class="nav-item" data-page="templatesPage" data-tooltip="Templates"><i class="fa-solid fa-rectangle-list"></i><span>Templates</span></a>
+      </div>
+      <div class="nav-group">
+        <span class="nav-label">Insights</span>
+        <a href="#" class="nav-item" data-page="reportsPage" data-tooltip="Reports"><i class="fa-solid fa-chart-bar"></i><span>Reports</span></a>
+        <a href="#" class="nav-item" data-page="settingsPage" data-tooltip="Settings"><i class="fa-solid fa-gear"></i><span>Settings</span></a>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <div class="user-avatar" id="adminAvatar">A</div>
+        <div class="user-info">
+          <span class="user-name" id="adminName">Admin</span>
+          <span class="user-role">Administrator</span>
+        </div>
+      </div>
+      <button class="btn-logout" id="adminLogoutBtn" title="Sign Out"><i class="fa-solid fa-right-from-bracket"></i></button>
+    </div>
+  </aside>
+
+  <main class="main-content" id="adminMain">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="hamburger-btn" id="hamburgerBtn"><i class="fa-solid fa-bars"></i></button>
+        <h2 class="page-title" id="pageTitle">Dashboard</h2>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-agency" id="topbarAgency"></div>
+        <div class="topbar-date" id="topbarDate"></div>
+      </div>
+    </header>
+
+    <!-- DASHBOARD -->
+    <section id="adminDashboardPage" class="page active">
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-icon green"><i class="fa-solid fa-circle-check"></i></div><div class="stat-body"><span class="stat-label">Revenue Collected</span><span class="stat-value" id="statTotalRevenue">—</span></div></div>
+        <div class="stat-card"><div class="stat-icon blue"><i class="fa-solid fa-file-invoice-dollar"></i></div><div class="stat-body"><span class="stat-label">Total Invoices</span><span class="stat-value" id="statTotalInvoices">—</span></div></div>
+        <div class="stat-card"><div class="stat-icon amber"><i class="fa-solid fa-clock"></i></div><div class="stat-body"><span class="stat-label">Unpaid Balance</span><span class="stat-value" id="statUnpaidInvoices">—</span></div></div>
+        <div class="stat-card"><div class="stat-icon red"><i class="fa-solid fa-triangle-exclamation"></i></div><div class="stat-body"><span class="stat-label">Overdue Amount</span><span class="stat-value" id="statOverdueInvoices">—</span></div></div>
+        <div class="stat-card"><div class="stat-icon teal"><i class="fa-solid fa-building"></i></div><div class="stat-body"><span class="stat-label">Active Clients</span><span class="stat-value" id="statTotalClients">—</span></div></div>
+        <div class="stat-card"><div class="stat-icon purple"><i class="fa-solid fa-file-contract"></i></div><div class="stat-body"><span class="stat-label">Open Quotes</span><span class="stat-value" id="statOpenQuotes">—</span></div></div>
+      </div>
+      <div class="dash-grid">
+        <div class="card">
+          <div class="card-head"><h3>Recent Invoices</h3><a href="#" class="link-sm" data-page="invoicesPage">View all</a></div>
+          <div class="table-wrap"><table class="data-table"><thead><tr><th>Invoice #</th><th>Client</th><th>Amount</th><th>Status</th></tr></thead><tbody id="dashRecentInvoices"><tr><td colspan="4" class="empty-row">Loading…</td></tr></tbody></table></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Recent Receipts</h3><a href="#" class="link-sm" data-page="receiptsPage">View all</a></div>
+          <div class="table-wrap"><table class="data-table"><thead><tr><th>Receipt #</th><th>Client</th><th>Amount</th><th>Date</th></tr></thead><tbody id="dashRecentReceipts"><tr><td colspan="4" class="empty-row">Loading…</td></tr></tbody></table></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CLIENTS -->
+    <section id="clientsPage" class="page">
+      <div class="page-actions">
+        <input type="text" id="clientSearch" class="search-input" placeholder="Search clients…" />
+        <button class="btn-primary" id="openAddClientBtn"><i class="fa-solid fa-plus"></i><span> Add Client</span></button>
+      </div>
+      <div class="card"><div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="clientsTableBody"><tr><td colspan="6" class="empty-row">Loading…</td></tr></tbody>
+      </table></div></div>
+    </section>
+
+    <!-- SERVICES -->
+    <section id="servicesPage" class="page">
+      <div class="page-actions">
+        <button class="btn-primary" id="openAddServiceCatBtn"><i class="fa-solid fa-plus"></i><span> Add Service Category</span></button>
+      </div>
+      <div id="servicesCategoriesList" class="services-list"></div>
+    </section>
+
+    <!-- PROJECTS -->
+    <section id="projectsPage" class="page">
+      <div class="page-actions">
+        <input type="text" id="projectSearch" class="search-input" placeholder="Search projects…" />
+        <button class="btn-primary" id="openAddProjectBtn"><i class="fa-solid fa-plus"></i><span> New Project</span></button>
+      </div>
+      <div class="card"><div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Project</th><th>Client</th><th>Service</th><th>Progress</th><th>Status</th><th>Drive</th><th>Actions</th></tr></thead>
+        <tbody id="projectsTableBody"><tr><td colspan="6" class="empty-row">Loading…</td></tr></tbody>
+      </table></div></div>
+    </section>
+
+    <!-- INVOICES -->
+    <section id="invoicesPage" class="page">
+      <div class="page-actions">
+        <input type="text" id="invoiceSearch" class="search-input" placeholder="Search invoices…" />
+        <select id="invoiceStatusFilter" class="filter-select"><option value="">All Statuses</option><option value="UNPAID">Unpaid</option><option value="PAID">Paid</option><option value="OVERDUE">Overdue</option></select>
+        <button class="btn-primary" id="openAddInvoiceBtn"><i class="fa-solid fa-plus"></i><span> New Invoice</span></button>
+      </div>
+      <div class="card"><div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Invoice #</th><th>Client</th><th>Issued</th><th>Due</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="invoicesTableBody"><tr><td colspan="7" class="empty-row">Loading…</td></tr></tbody>
+      </table></div></div>
+    </section>
+
+    <!-- RECEIPTS -->
+    <section id="receiptsPage" class="page">
+      <div class="page-actions">
+        <input type="text" id="receiptSearch" class="search-input" placeholder="Search receipts…" />
+        <button class="btn-primary" id="openAddReceiptBtn"><i class="fa-solid fa-plus"></i><span> New Receipt</span></button>
+      </div>
+      <div class="card"><div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Receipt #</th><th>Invoice #</th><th>Client</th><th>Date</th><th>Amount</th><th>Method</th><th>Actions</th></tr></thead>
+        <tbody id="receiptsTableBody"><tr><td colspan="7" class="empty-row">Loading…</td></tr></tbody>
+      </table></div></div>
+    </section>
+
+    <!-- QUOTES -->
+    <section id="quotesPage" class="page">
+      <div class="page-actions">
+        <input type="text" id="quoteSearch" class="search-input" placeholder="Search quotes…" />
+        <button class="btn-primary" id="openAddQuoteBtn"><i class="fa-solid fa-plus"></i><span> New Quote</span></button>
+      </div>
+      <div class="card"><div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Quote #</th><th>Client</th><th>Date</th><th>Valid Until</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="quotesTableBody"><tr><td colspan="7" class="empty-row">Loading…</td></tr></tbody>
+      </table></div></div>
+    </section>
+
+    <!-- TEMPLATES -->
+    <section id="templatesPage" class="page">
+      <div class="page-actions">
+        <button class="btn-primary" id="openAddTemplateBtn"><i class="fa-solid fa-plus"></i><span> New Template</span></button>
+      </div>
+      <div class="template-grid" id="templateGrid">
+        <div class="empty-row" style="padding:40px;text-align:center;color:var(--text-3)">
+          <i class="fa-solid fa-rectangle-list" style="font-size:28px;margin-bottom:10px;display:block"></i>
+          No templates yet. Create one to quickly generate recurring invoices.
+        </div>
+      </div>
+    </section>
+
+    <!-- REPORTS -->
+    <section id="reportsPage" class="page">
+      <div class="reports-grid">
+        <div class="card report-card"><div class="card-head"><h3><i class="fa-solid fa-chart-pie"></i> Revenue Breakdown</h3></div><div id="revenueBreakdown" class="report-body"></div></div>
+        <div class="card report-card"><div class="card-head"><h3><i class="fa-solid fa-ranking-star"></i> Top Clients</h3></div><div id="topClientsReport" class="report-body"></div></div>
+        <div class="card report-card full-width"><div class="card-head"><h3><i class="fa-solid fa-triangle-exclamation"></i> Overdue Invoices</h3></div>
+          <div class="table-wrap"><table class="data-table"><thead><tr><th>Invoice #</th><th>Client</th><th>Due Date</th><th>Amount</th><th>Days Overdue</th></tr></thead><tbody id="overdueReport"></tbody></table></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="settingsPage" class="page">
+      <div class="card settings-card">
+        <div class="card-head"><h3>Agency Settings</h3></div>
+        <form id="settingsForm" class="settings-form">
+          <div class="form-row">
+            <div class="field-group"><label>Agency Name</label><input type="text" id="settingAgencyName" placeholder="Your Company Ltd." /></div>
+            <div class="field-group"><label>Currency Symbol</label><input type="text" id="settingCurrency" placeholder="GHS" maxlength="5" /></div>
+          </div>
+          <div class="form-row">
+            <div class="field-group"><label>Agency Email</label><input type="email" id="settingEmail" placeholder="billing@company.com" /></div>
+            <div class="field-group"><label>Agency Phone</label><input type="text" id="settingPhone" placeholder="+233 XX XXX XXXX" /></div>
+          </div>
+          <div class="field-group"><label>Agency Address</label><textarea id="settingAddress" rows="2" placeholder="123 Business Street, City"></textarea></div>
+          <div class="field-group">
+            <label>Company Logo URL</label>
+            <input type="url" id="settingLogoUrl" placeholder="https://yourdomain.com/logo.png" />
+            <span class="field-hint">Direct image URL used on PDF documents. Use a publicly accessible link.</span>
+          </div>
+          <div class="field-group"><label>Invoice Footer Note</label><textarea id="settingFooter" rows="2" placeholder="Thank you for your business."></textarea></div>
+          <button type="submit" class="btn-primary">Save Settings</button>
+        </form>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ═══════════════════════════════ CLIENT SHELL ═══════════════════════════════ -->
+<div id="clientShell" class="app-shell hide">
+  <aside class="sidebar client-sidebar" id="clientSidebar">
+    <div class="sidebar-top">
+      <div class="sidebar-brand">
+        <div class="brand-icon"><i class="fa-solid fa-layer-group"></i></div>
+        <div class="brand-text"><span class="brand-name">Counterpane</span><span class="brand-sub">Client Portal</span></div>
+      </div>
+      <button class="sidebar-close-btn" id="clientSidebarCloseBtn"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-group">
+        <a href="#" class="nav-item active" data-client-page="clientDashboardPage" data-tooltip="Overview"><i class="fa-solid fa-house"></i><span>Overview</span></a>
+        <a href="#" class="nav-item" data-client-page="clientInvoicesPage" data-tooltip="Invoices"><i class="fa-solid fa-file-invoice"></i><span>Invoices</span></a>
+        <a href="#" class="nav-item" data-client-page="clientReceiptsPage" data-tooltip="Receipts"><i class="fa-solid fa-receipt"></i><span>Receipts</span></a>
+        <a href="#" class="nav-item" data-client-page="clientQuotesPage" data-tooltip="Quotes"><i class="fa-solid fa-file-contract"></i><span>Quotes</span></a>
+        <a href="#" class="nav-item" data-client-page="clientProjectsPage" data-tooltip="Projects"><i class="fa-solid fa-folder-open"></i><span>Projects</span></a>
+        <a href="#" class="nav-item" data-client-page="clientPasswordPage" data-tooltip="Password"><i class="fa-solid fa-key"></i><span>Change Password</span></a>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <div class="user-avatar" id="clientAvatar">C</div>
+        <div class="user-info"><span class="user-name" id="clientName">Client</span><span class="user-role">Client Account</span></div>
+      </div>
+      <button class="btn-logout" id="clientLogoutBtn" title="Sign Out"><i class="fa-solid fa-right-from-bracket"></i></button>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="hamburger-btn" id="clientHamburgerBtn"><i class="fa-solid fa-bars"></i></button>
+        <h2 class="page-title" id="clientPageTitle">Overview</h2>
+      </div>
+      <div class="topbar-right"><div class="topbar-agency" id="clientTopbarAgency"></div></div>
+    </header>
+
+    <section id="clientDashboardPage" class="page active">
+      <div class="stats-grid four">
+        <div class="stat-card"><div class="stat-icon blue"><i class="fa-solid fa-file-invoice"></i></div><div class="stat-body"><span class="stat-label">My Invoices</span><span class="stat-value" id="cStatInvoices">—</span></div></div>
+        <div class="stat-card"><div class="stat-icon amber"><i class="fa-solid fa-clock"></i></div><div class="stat-body"><span class="stat-label">Unpaid</span><span class="stat-value" id="cStatUnpaid">—</span></div></div>
+        <div class="stat-card"><div class="stat-icon green"><i class="fa-solid fa-circle-check"></i></div><div class="stat-body"><span class="stat-label">Paid</span><span class="stat-value" id="cStatPaid">—</span></div></div>
+        <div class="stat-card"><div class="stat-icon teal"><i class="fa-solid fa-folder-open"></i></div><div class="stat-body"><span class="stat-label">Projects</span><span class="stat-value" id="cStatProjects">—</span></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Recent Invoices</h3></div>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th>Invoice #</th><th>Amount</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody id="clientDashInvoices"></tbody></table></div>
+      </div>
+    </section>
+
+    <section id="clientInvoicesPage" class="page">
+      <div class="card"><div class="table-wrap"><table class="data-table"><thead><tr><th>Invoice #</th><th>Issued</th><th>Due</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody id="clientInvoicesBody"></tbody></table></div></div>
+    </section>
+    <section id="clientReceiptsPage" class="page">
+      <div class="card"><div class="table-wrap"><table class="data-table"><thead><tr><th>Receipt #</th><th>Invoice #</th><th>Date</th><th>Amount</th><th>Method</th><th></th></tr></thead><tbody id="clientReceiptsBody"></tbody></table></div></div>
+    </section>
+    <section id="clientQuotesPage" class="page">
+      <div class="card"><div class="table-wrap"><table class="data-table"><thead><tr><th>Quote #</th><th>Date</th><th>Valid Until</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody id="clientQuotesBody"></tbody></table></div></div>
+    </section>
+    <section id="clientProjectsPage" class="page">
+      <div class="projects-portal-grid" id="clientProjectsGrid"></div>
+    </section>
+
+    <!-- CHANGE PASSWORD -->
+    <section id="clientPasswordPage" class="page">
+      <div class="card settings-card">
+        <div class="card-head"><h3>
+          <i class="fa-solid fa-key"></i> Change Password</h3></div>
+        <form id="changePasswordForm" class="settings-form">
+          <div class="field-group"><label>Current Password</label>
+            <div class="input-wrap">
+              <!-- <i class="fa-solid fa-lock"> -->
+
+              </i><input type="password" id="currentPassword" placeholder="Your current password" /></div>
+          </div>
+          <div class="field-group"><label>New Password</label>
+            <div class="input-wrap">
+              <!-- <i class="fa-solid fa-lock"> -->
+
+              </i><input type="password" id="newPassword" placeholder="At least 6 characters" /></div>
+          </div>
+          <div class="field-group"><label>Confirm New Password</label>
+            <div class="input-wrap">
+              <!-- <i class="fa-solid fa-lock"> -->
+
+              </i><input type="password" id="confirmPassword" placeholder="Repeat new password" /></div>
+          </div>
+          <div id="passwordChangeError" class="form-error hide"></div>
+          <div id="passwordChangeSuccess" class="form-success hide"></div>
+          <button type="submit" class="btn-primary" id="changePasswordBtn">Update Password</button>
+        </form>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ═══════════════════════════════ MODALS ═══════════════════════════════ -->
+
+<!-- ADD / EDIT CLIENT (includes portal account setup) -->
+<div id="clientModal" class="modal-overlay hide">
+  <div class="modal">
+    <div class="modal-head"><h3 id="clientModalTitle">Add Client</h3><button class="modal-close" data-close="clientModal"><i class="fa-solid fa-xmark"></i></button></div>
+    <form id="clientForm" novalidate>
+      <input type="hidden" id="clientEditId" />
+      <input type="hidden" id="clientExistingEmail" />
+      <div class="modal-section-label">Client Information</div>
+      <div class="form-row">
+        <div class="field-group"><label>Company Name *</label><input type="text" id="clientCompany" required /></div>
+        <div class="field-group"><label>Contact Person</label><input type="text" id="clientContact" /></div>
+      </div>
+      <div class="form-row">
+        <div class="field-group"><label>Business Email</label><input type="email" id="clientEmail" /></div>
+        <div class="field-group"><label>Phone</label><input type="text" id="clientPhone" /></div>
+      </div>
+      <div class="field-group"><label>Address</label><textarea id="clientAddress" rows="2"></textarea></div>
+      <div class="field-group"><label>Google Drive Folder Link</label><input type="url" id="clientDrive" placeholder="https://drive.google.com/…" /></div>
+      <label class="checkbox-label"><input type="checkbox" id="clientActive" checked /> Active Client</label>
+
+      <!-- Portal account section — shown for new clients, read-only for edits -->
+      <div id="clientPortalSection">
+        <div class="modal-section-label">Portal Login Setup</div>
+        <div class="form-row">
+          <div class="field-group"><label>Login Email *</label><input type="email" id="clientLoginEmail" /></div>
+          <div class="field-group"><label>Password *</label>
+            <div class="input-wrap">
+              <input type="password" id="clientLoginPassword" placeholder="Min. 6 characters" style="padding-left:12px" />
+              <button type="button" class="toggle-pw" id="toggleClientPw" tabindex="-1"><i class="fa-solid fa-eye"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Edit mode: show existing login info + reset button -->
+      <div id="clientPortalEditSection" class="hide">
+        <div class="modal-section-label">Portal Account</div>
+        <div class="portal-account-info">
+          <div class="portal-email-display"><i class="fa-solid fa-envelope"></i><span id="clientPortalEmailDisplay">—</span></div>
+          <button type="button" class="btn-ghost btn-sm" id="sendResetEmailBtn"><i class="fa-solid fa-paper-plane"></i> Send Password Reset Email</button>
+        </div>
+      </div>
+
+      <div id="clientFormError" class="form-error hide"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" data-close="clientModal">Cancel</button>
+        <button type="submit" class="btn-primary" id="clientSubmitBtn">Save Client</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- SERVICE CATEGORY MODAL -->
+<div id="serviceCategoryModal" class="modal-overlay hide">
+  <div class="modal">
+    <div class="modal-head"><h3 id="serviceCatModalTitle">Add Service Category</h3><button class="modal-close" data-close="serviceCategoryModal"><i class="fa-solid fa-xmark"></i></button></div>
+    <form id="serviceCategoryForm" novalidate>
+      <input type="hidden" id="serviceCatEditId" />
+      <div class="field-group"><label>Category Name *</label><input type="text" id="serviceCatName" placeholder="e.g. Web Development" required /></div>
+      <div class="field-group"><label>Description</label><textarea id="serviceCatDesc" rows="2" placeholder="Brief description of this service category"></textarea></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" data-close="serviceCategoryModal">Cancel</button>
+        <button type="submit" class="btn-primary">Save Category</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- SERVICE TYPE / PLAN MODAL -->
+<div id="serviceTypeModal" class="modal-overlay hide">
+  <div class="modal modal-lg">
+    <div class="modal-head"><h3 id="serviceTypeModalTitle">Add Plan</h3><button class="modal-close" data-close="serviceTypeModal"><i class="fa-solid fa-xmark"></i></button></div>
+    <form id="serviceTypeForm" novalidate>
+      <input type="hidden" id="serviceTypeCatId" />
+      <input type="hidden" id="serviceTypeEditId" />
+      <div class="form-row">
+        <div class="field-group"><label>Plan Name *</label><input type="text" id="serviceTypeName" placeholder="e.g. Starter Plan" required /></div>
+        <div class="field-group"><label>Base Price</label><input type="number" id="serviceTypePrice" placeholder="0.00" min="0" step="0.01" /></div>
+      </div>
+      <div class="field-group"><label>Description</label><input type="text" id="serviceTypeDesc" placeholder="Brief tagline for this plan" /></div>
+      <div class="field-group">
+        <label>Deliverables <span class="field-hint-inline">(one per line)</span></label>
+        <div id="serviceTypeDeliverablesContainer" class="deliverables-list"></div>
+        <button type="button" class="btn-ghost btn-sm add-deliverable-btn" id="addServiceDeliverableBtn"><i class="fa-solid fa-plus"></i> Add Deliverable</button>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" data-close="serviceTypeModal">Cancel</button>
+        <button type="submit" class="btn-primary">Save Plan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ADD / EDIT PROJECT -->
+<div id="projectModal" class="modal-overlay hide">
+  <div class="modal modal-lg">
+    <div class="modal-head"><h3 id="projectModalTitle">New Project</h3><button class="modal-close" data-close="projectModal"><i class="fa-solid fa-xmark"></i></button></div>
+    <form id="projectForm" novalidate>
+      <input type="hidden" id="projectEditId" />
+      <div class="modal-section-label">Project Details</div>
+      <div class="form-row">
+        <div class="field-group"><label>Project Name *</label><input type="text" id="projectName" required /></div>
+        <div class="field-group"><label>Client *</label><select id="projectClientTarget" required><option value="">— Select —</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="field-group"><label>Status</label>
+          <select id="projectStatus"><option value="Active">Active</option><option value="Completed">Completed</option><option value="On Hold">On Hold</option><option value="Internal">Internal</option></select>
+        </div>
+        <div class="field-group"><label>Google Drive Link</label><input type="url" id="projectDrive" placeholder="https://drive.google.com/…" /></div>
+      </div>
+      <div class="field-group"><label>Description</label><textarea id="projectDescription" rows="2"></textarea></div>
+
+      <div class="modal-section-label">Service Configuration <span class="field-hint-inline">(optional)</span></div>
+      <div class="form-row">
+        <div class="field-group"><label>Service Category</label>
+          <select id="projectServiceCategory"><option value="">— Select Category —</option></select>
+        </div>
+        <div class="field-group"><label>Plan / Type</label>
+          <select id="projectServiceType" disabled><option value="">— Select Category First —</option></select>
+        </div>
+      </div>
+
+      <div id="projectDeliverableSection">
+        <div class="field-group">
+          <label>Deliverables / Scope of Work</label>
+          <div id="projectDeliverablesList" class="deliverables-list"></div>
+          <button type="button" class="btn-ghost btn-sm add-deliverable-btn" id="addProjectDeliverableBtn"><i class="fa-solid fa-plus"></i> Add Deliverable</button>
+        </div>
+        <div class="field-group"><label>Project Price</label><input type="number" id="projectPrice" placeholder="0.00" min="0" step="0.01" /></div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" data-close="projectModal">Cancel</button>
+        <button type="submit" class="btn-primary">Save Project</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ADD INVOICE -->
+<div id="invoiceModal" class="modal-overlay hide">
+  <div class="modal modal-lg">
+    <div class="modal-head"><h3 id="invoiceModalTitle">New Invoice</h3><button class="modal-close" data-close="invoiceModal"><i class="fa-solid fa-xmark"></i></button></div>
+    <form id="invoiceForm" novalidate>
+      <input type="hidden" id="invoiceEditId" />
+      <div class="form-row">
+        <div class="field-group"><label>Client *</label><select id="invoiceClientTarget" required><option value="">— Select —</option></select></div>
+        <div class="field-group"><label>Date Issued *</label><input type="date" id="invoiceDate" required /></div>
+        <div class="field-group"><label>Due Date *</label><input type="date" id="invoiceDueDate" required /></div>
+      </div>
+      <div class="form-row">
+        <div class="field-group"><label>Tax Rate (%)</label><input type="number" id="invoiceTaxRate" value="0" min="0" max="100" step="0.1" /></div>
+        <div class="field-group"><label>Discount (%)</label><input type="number" id="invoiceDiscount" value="0" min="0" max="100" step="0.1" /></div>
+      </div>
+      <div class="line-items-section">
+        <div class="line-items-head"><span>Description</span><span>Qty</span><span>Unit Rate</span><span>Total</span><span></span></div>
+        <div id="invoiceLineItems"></div>
+        <button type="button" class="btn-ghost btn-sm add-line-btn" id="addInvoiceLineBtn"><i class="fa-solid fa-plus"></i> Add Line</button>
+      </div>
+      <div class="invoice-totals">
+        <div class="total-row"><span>Subtotal</span><span id="invSubtotal">—</span></div>
+        <div class="total-row"><span>Discount</span><span id="invDiscountAmt">—</span></div>
+        <div class="total-row"><span>Tax</span><span id="invTaxAmt">—</span></div>
+        <div class="total-row grand"><span>Total</span><span id="invGrandTotal">—</span></div>
+      </div>
+      <div class="form-row">
+        <div class="field-group"><label>Linked Project</label>
+          <select id="invoiceProjectTarget"><option value="">— None / Select Project —</option></select>
+        </div>
+        <div class="field-group"><label>Payment Type</label>
+          <select id="invoicePaymentType">
+            <option value="Full Payment">Full Payment</option>
+            <option value="Deposit">Deposit / Advance</option>
+            <option value="Milestone">Milestone Payment</option>
+            <option value="Monthly Retainer">Monthly Retainer</option>
+            <option value="Installment">Installment</option>
+            <option value="Final Balance">Final Balance</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-group"><label>Notes</label><textarea id="invoiceNotes" rows="2" placeholder="Optional notes…"></textarea></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" data-close="invoiceModal">Cancel</button>
+        <button type="submit" class="btn-primary">Save Invoice</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ADD RECEIPT -->
+<div id="receiptModal" class="modal-overlay hide">
+  <div class="modal">
+    <div class="modal-head"><h3>Record Receipt</h3><button class="modal-close" data-close="receiptModal"><i class="fa-solid fa-xmark"></i></button></div>
+    <form id="receiptForm" novalidate>
+      <div class="field-group"><label>Linked Invoice *</label><select id="receiptInvoiceTarget" required><option value="">— Select Invoice —</option></select></div>
+      <div class="form-row">
+        <div class="field-group"><label>Date Paid *</label><input type="date" id="receiptDate" required /></div>
+        <div class="field-group">
+          <label>Amount Paid *<span class="field-hint-inline" id="receiptAmountHint"></span></label>
+          <input type="number" id="receiptAmount" required min="0" step="0.01" placeholder="Auto-filled from invoice" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field-group"><label>Payment Type</label>
+          <select id="receiptPaymentType">
+            <option value="Full Payment">Full Payment</option>
+            <option value="Partial Payment">Partial Payment</option>
+            <option value="Deposit">Deposit / Advance</option>
+            <option value="Monthly Installment">Monthly Installment</option>
+            <option value="Milestone">Milestone Payment</option>
+            <option value="Final Balance">Final Balance</option>
+          </select>
+        </div>
+        <div class="field-group"><label>Payment Method</label>
+          <select id="receiptMethod"><option>Bank Transfer</option><option>Mobile Money</option><option>Cash</option><option>Cheque</option><option>Card</option></select>
+        </div>
+      </div>
+      <div class="field-group"><label>Reference / Notes</label><input type="text" id="receiptNotes" placeholder="Transaction ID, reference number, etc." /></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" data-close="receiptModal">Cancel</button>
+        <button type="submit" class="btn-primary">Save Receipt</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ADD QUOTE -->
+<div id="quoteModal" class="modal-overlay hide">
+  <div class="modal modal-lg">
+    <div class="modal-head"><h3>New Quote</h3><button class="modal-close" data-close="quoteModal"><i class="fa-solid fa-xmark"></i></button></div>
+    <form id="quoteForm" novalidate>
+      <div class="form-row">
+        <div class="field-group"><label>Client *</label><select id="quoteClientTarget" required><option value="">— Select —</option></select></div>
+        <div class="field-group"><label>Date *</label><input type="date" id="quoteDate" required /></div>
+        <div class="field-group"><label>Valid Until *</label><input type="date" id="quoteValidUntil" required /></div>
+      </div>
+      <div class="field-group"><label>Tax Rate (%)</label><input type="number" id="quoteTaxRate" value="0" min="0" max="100" step="0.1" /></div>
+      <div class="line-items-section">
+        <div class="line-items-head"><span>Description</span><span>Qty</span><span>Unit Rate</span><span>Total</span><span></span></div>
+        <div id="quoteLineItems"></div>
+        <button type="button" class="btn-ghost btn-sm add-line-btn" id="addQuoteLineBtn"><i class="fa-solid fa-plus"></i> Add Line</button>
+      </div>
+      <div class="invoice-totals">
+        <div class="total-row"><span>Subtotal</span><span id="quoteSubtotal">—</span></div>
+        <div class="total-row"><span>Tax</span><span id="quoteTaxAmt">—</span></div>
+        <div class="total-row grand"><span>Total</span><span id="quoteGrandTotal">—</span></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" data-close="quoteModal">Cancel</button>
+        <button type="submit" class="btn-primary">Save Quote</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- PROJECT PROGRESS MODAL -->
+<div id="progressModal" class="modal-overlay hide">
+  <div class="modal modal-lg">
+    <div class="modal-head">
+      <h3 id="progressModalTitle">Project Milestones</h3>
+      <button class="modal-close" data-close="progressModal"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="progressForm" novalidate>
+      <input type="hidden" id="progressProjectId" />
+
+      <div class="field-group">
+        <label>Milestones <span class="field-hint-inline">— each with a name, date and note</span></label>
+        <div id="progressMilestonesList" class="milestones-list"></div>
+        <button type="button" class="btn-ghost btn-sm" id="addMilestoneBtn" style="margin-top:8px">
+          <i class="fa-solid fa-plus"></i> Add Milestone
+        </button>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" data-close="progressModal">Cancel</button>
+        <button type="submit" class="btn-primary">Save Milestones</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- TEMPLATE MODAL -->
+<div id="templateModal" class="modal-overlay hide">
+  <div class="modal modal-lg">
+    <div class="modal-head">
+      <h3 id="templateModalTitle">New Invoice Template</h3>
+      <button class="modal-close" data-close="templateModal"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="templateForm" novalidate>
+      <input type="hidden" id="templateEditId" />
+      <div class="form-row">
+        <div class="field-group"><label>Template Name *</label><input type="text" id="templateName" placeholder="e.g. Monthly Web Retainer" required /></div>
+        <div class="field-group"><label>Client *</label><select id="templateClientTarget" required><option value="">— Select —</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="field-group"><label>Frequency</label>
+          <select id="templateFrequency">
+            <option value="One-time">One-time</option>
+            <option value="Weekly">Weekly</option>
+            <option value="Monthly" selected>Monthly</option>
+            <option value="Quarterly">Quarterly</option>
+            <option value="Annually">Annually</option>
+          </select>
+        </div>
+        <div class="field-group"><label>Payment Type</label>
+          <select id="templatePaymentType">
+            <option value="Full Payment">Full Payment</option>
+            <option value="Monthly Retainer">Monthly Retainer</option>
+            <option value="Milestone">Milestone Payment</option>
+            <option value="Installment">Installment</option>
+          </select>
+        </div>
+        <div class="field-group"><label>Tax Rate (%)</label><input type="number" id="templateTaxRate" value="0" min="0" max="100" step="0.1" /></div>
+      </div>
+      <div class="line-items-section">
+        <div class="line-items-head"><span>Description</span><span>Qty</span><span>Unit Rate</span><span>Total</span><span></span></div>
+        <div id="templateLineItems"></div>
+        <button type="button" class="btn-ghost btn-sm add-line-btn" id="addTemplateLineBtn"><i class="fa-solid fa-plus"></i> Add Line</button>
+      </div>
+      <div class="invoice-totals">
+        <div class="total-row"><span>Subtotal</span><span id="tmplSubtotal">—</span></div>
+        <div class="total-row"><span>Tax</span><span id="tmplTaxAmt">—</span></div>
+        <div class="total-row grand"><span>Total</span><span id="tmplGrandTotal">—</span></div>
+      </div>
+      <div class="field-group"><label>Notes</label><textarea id="templateNotes" rows="2" placeholder="Notes added to every generated invoice…"></textarea></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" data-close="templateModal">Cancel</button>
+        <button type="submit" class="btn-primary">Save Template</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- STATEMENT MODAL -->
+<div id="statementModal" class="modal-overlay hide">
+  <div class="modal modal-sm">
+    <div class="modal-head">
+      <h3>Generate Client Statement</h3>
+      <button class="modal-close" data-close="statementModal"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="statementForm" novalidate>
+      <input type="hidden" id="statementClientId" />
+      <div class="field-group"><label>Client</label><input type="text" id="statementClientName" readonly style="background:#fafafa" /></div>
+      <div class="form-row">
+        <div class="field-group"><label>From Date *</label><input type="date" id="statementFrom" required /></div>
+        <div class="field-group"><label>To Date *</label><input type="date" id="statementTo" required /></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" data-close="statementModal">Cancel</button>
+        <button type="submit" class="btn-primary"><i class="fa-solid fa-file-pdf"></i> Generate PDF</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- CONFIRM DIALOG -->
+<div id="confirmModal" class="modal-overlay hide">
+  <div class="modal modal-sm confirm-modal">
+    <div class="confirm-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+    <h3 class="confirm-title">Are you sure?</h3>
+    <p class="confirm-msg" id="confirmMsg">This action cannot be undone.</p>
+    <div class="confirm-actions">
+      <button class="btn-ghost" id="confirmCancelBtn">Cancel</button>
+      <button class="btn-danger" id="confirmOkBtn"><i class="fa-solid fa-trash"></i> Delete</button>
+    </div>
+  </div>
+</div>
+
+<div id="toastContainer" class="toast-container"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
