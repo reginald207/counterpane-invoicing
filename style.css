@@ -592,6 +592,201 @@ textarea { resize: vertical; }
 .toast.warning { background: var(--amber-600); }
 @keyframes toast-in { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
 
+/* ─── MOBILE TABLE → CARD TRANSFORMATION ─────────────────
+   Applied at ≤640px. Tables in the listed pages become
+   stacked cards: each <tr> is a card, each <td> a labeled row.
+   First <td> = card header (green tint, bold, no label).
+   Empty label ("") = right-aligned actions row, no label shown.
+──────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+
+  /* Let cards flow naturally — no horizontal scroll needed */
+  #clientsPage .table-wrap,
+  #projectsPage .table-wrap,
+  #invoicesPage .table-wrap,
+  #receiptsPage .table-wrap,
+  #quotesPage .table-wrap,
+  #clientDashboardPage .table-wrap,
+  #clientInvoicesPage .table-wrap,
+  #clientReceiptsPage .table-wrap,
+  #clientQuotesPage .table-wrap { overflow-x: visible; }
+
+  /* ── Block layout ── */
+  #clientsPage .data-table,
+  #projectsPage .data-table,
+  #invoicesPage .data-table,
+  #receiptsPage .data-table,
+  #quotesPage .data-table,
+  #clientDashboardPage .data-table,
+  #clientInvoicesPage .data-table,
+  #clientReceiptsPage .data-table,
+  #clientQuotesPage .data-table { display: block; }
+
+  #clientsPage .data-table thead,
+  #projectsPage .data-table thead,
+  #invoicesPage .data-table thead,
+  #receiptsPage .data-table thead,
+  #quotesPage .data-table thead,
+  #clientDashboardPage .data-table thead,
+  #clientInvoicesPage .data-table thead,
+  #clientReceiptsPage .data-table thead,
+  #clientQuotesPage .data-table thead { display: none; }
+
+  #clientsPage .data-table tbody,
+  #projectsPage .data-table tbody,
+  #invoicesPage .data-table tbody,
+  #receiptsPage .data-table tbody,
+  #quotesPage .data-table tbody,
+  #clientDashboardPage .data-table tbody,
+  #clientInvoicesPage .data-table tbody,
+  #clientReceiptsPage .data-table tbody,
+  #clientQuotesPage .data-table tbody {
+    display: flex; flex-direction: column; gap: 10px;
+  }
+
+  /* ── Each row becomes a card ── */
+  #clientsPage .data-table tbody tr,
+  #projectsPage .data-table tbody tr,
+  #invoicesPage .data-table tbody tr,
+  #receiptsPage .data-table tbody tr,
+  #quotesPage .data-table tbody tr,
+  #clientDashboardPage .data-table tbody tr,
+  #clientInvoicesPage .data-table tbody tr,
+  #clientReceiptsPage .data-table tbody tr,
+  #clientQuotesPage .data-table tbody tr {
+    display: block;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+
+  /* Hover on card, not individual cells */
+  #clientsPage .data-table tbody tr:hover td,
+  #projectsPage .data-table tbody tr:hover td,
+  #invoicesPage .data-table tbody tr:hover td,
+  #receiptsPage .data-table tbody tr:hover td,
+  #quotesPage .data-table tbody tr:hover td,
+  #clientDashboardPage .data-table tbody tr:hover td,
+  #clientInvoicesPage .data-table tbody tr:hover td,
+  #clientReceiptsPage .data-table tbody tr:hover td,
+  #clientQuotesPage .data-table tbody tr:hover td { background: inherit; }
+
+  /* ── Each cell ── */
+  #clientsPage .data-table tbody td,
+  #projectsPage .data-table tbody td,
+  #invoicesPage .data-table tbody td,
+  #receiptsPage .data-table tbody td,
+  #quotesPage .data-table tbody td,
+  #clientDashboardPage .data-table tbody td,
+  #clientInvoicesPage .data-table tbody td,
+  #clientReceiptsPage .data-table tbody td,
+  #clientQuotesPage .data-table tbody td {
+    display: flex; align-items: center;
+    justify-content: space-between; gap: 12px;
+    padding: 9px 14px; font-size: 13px;
+    border-bottom: 1px solid var(--border);
+    text-align: right; min-height: 38px;
+  }
+  #clientsPage .data-table tbody td:last-child,
+  #projectsPage .data-table tbody td:last-child,
+  #invoicesPage .data-table tbody td:last-child,
+  #receiptsPage .data-table tbody td:last-child,
+  #quotesPage .data-table tbody td:last-child,
+  #clientDashboardPage .data-table tbody td:last-child,
+  #clientInvoicesPage .data-table tbody td:last-child,
+  #clientReceiptsPage .data-table tbody td:last-child,
+  #clientQuotesPage .data-table tbody td:last-child { border-bottom: none; }
+
+  /* ── Label (data-label attribute) ── */
+  #clientsPage .data-table tbody td[data-label]::before,
+  #projectsPage .data-table tbody td[data-label]::before,
+  #invoicesPage .data-table tbody td[data-label]::before,
+  #receiptsPage .data-table tbody td[data-label]::before,
+  #quotesPage .data-table tbody td[data-label]::before,
+  #clientDashboardPage .data-table tbody td[data-label]::before,
+  #clientInvoicesPage .data-table tbody td[data-label]::before,
+  #clientReceiptsPage .data-table tbody td[data-label]::before,
+  #clientQuotesPage .data-table tbody td[data-label]::before {
+    content: attr(data-label);
+    font-size: 10.5px; font-weight: 700;
+    color: var(--text-3); text-transform: uppercase;
+    letter-spacing: 0.5px; flex-shrink: 0;
+    text-align: left; white-space: nowrap;
+  }
+
+  /* ── First cell = card header (no label) ── */
+  #clientsPage .data-table tbody td:first-child,
+  #projectsPage .data-table tbody td:first-child,
+  #invoicesPage .data-table tbody td:first-child,
+  #receiptsPage .data-table tbody td:first-child,
+  #quotesPage .data-table tbody td:first-child,
+  #clientDashboardPage .data-table tbody td:first-child,
+  #clientInvoicesPage .data-table tbody td:first-child,
+  #clientReceiptsPage .data-table tbody td:first-child,
+  #clientQuotesPage .data-table tbody td:first-child {
+    background: var(--green-50);
+    border-bottom-color: var(--green-100);
+    font-size: 14px; font-weight: 600;
+    padding: 12px 14px;
+  }
+  #clientsPage .data-table tbody td:first-child::before,
+  #projectsPage .data-table tbody td:first-child::before,
+  #invoicesPage .data-table tbody td:first-child::before,
+  #receiptsPage .data-table tbody td:first-child::before,
+  #quotesPage .data-table tbody td:first-child::before,
+  #clientDashboardPage .data-table tbody td:first-child::before,
+  #clientInvoicesPage .data-table tbody td:first-child::before,
+  #clientReceiptsPage .data-table tbody td:first-child::before,
+  #clientQuotesPage .data-table tbody td:first-child::before { display: none; }
+
+  /* ── Actions cell (data-label="") — right-aligned, subtle bg ── */
+  #clientsPage .data-table tbody td[data-label=""],
+  #projectsPage .data-table tbody td[data-label=""],
+  #invoicesPage .data-table tbody td[data-label=""],
+  #receiptsPage .data-table tbody td[data-label=""],
+  #quotesPage .data-table tbody td[data-label=""],
+  #clientDashboardPage .data-table tbody td[data-label=""],
+  #clientInvoicesPage .data-table tbody td[data-label=""],
+  #clientReceiptsPage .data-table tbody td[data-label=""],
+  #clientQuotesPage .data-table tbody td[data-label=""] {
+    justify-content: flex-end; background: #fafafa;
+  }
+  #clientsPage .data-table tbody td[data-label=""]::before,
+  #projectsPage .data-table tbody td[data-label=""]::before,
+  #invoicesPage .data-table tbody td[data-label=""]::before,
+  #receiptsPage .data-table tbody td[data-label=""]::before,
+  #quotesPage .data-table tbody td[data-label=""]::before,
+  #clientDashboardPage .data-table tbody td[data-label=""]::before,
+  #clientInvoicesPage .data-table tbody td[data-label=""]::before,
+  #clientReceiptsPage .data-table tbody td[data-label=""]::before,
+  #clientQuotesPage .data-table tbody td[data-label=""]::before { display: none; }
+
+  /* ── Empty row ── */
+  #clientsPage .data-table tbody td.empty-row,
+  #projectsPage .data-table tbody td.empty-row,
+  #invoicesPage .data-table tbody td.empty-row,
+  #receiptsPage .data-table tbody td.empty-row,
+  #quotesPage .data-table tbody td.empty-row,
+  #clientDashboardPage .data-table tbody td.empty-row,
+  #clientInvoicesPage .data-table tbody td.empty-row,
+  #clientReceiptsPage .data-table tbody td.empty-row,
+  #clientQuotesPage .data-table tbody td.empty-row {
+    justify-content: center; background: white !important;
+    padding: 28px 14px !important; border-bottom: none;
+  }
+  #clientsPage .data-table tbody td.empty-row::before,
+  #projectsPage .data-table tbody td.empty-row::before,
+  #invoicesPage .data-table tbody td.empty-row::before,
+  #receiptsPage .data-table tbody td.empty-row::before,
+  #quotesPage .data-table tbody td.empty-row::before,
+  #clientDashboardPage .data-table tbody td.empty-row::before,
+  #clientInvoicesPage .data-table tbody td.empty-row::before,
+  #clientReceiptsPage .data-table tbody td.empty-row::before,
+  #clientQuotesPage .data-table tbody td.empty-row::before { display: none; }
+}
+
 /* ─── RESPONSIVE — TABLET ─────────────────────────────── */
 
 /* ─── SIDEBAR TOOLTIP (collapsed tablet state) ──────────── */
