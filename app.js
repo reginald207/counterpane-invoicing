@@ -734,17 +734,16 @@ function renderClientsTable() {
   const rows = cache.clients.filter(c =>
     !q || c.companyName?.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q));
   document.getElementById("clientsTableBody").innerHTML = rows.length ? rows.map(c => `<tr>
-    <td><strong>${c.companyName}</strong></td>
-    <td>${c.contactPerson || "—"}</td>
-    <td>${c.email || "—"}</td>
-    <td>${c.phone || "—"}</td>
-    <td>${statusBadge(c.isActive ? "Active" : "On Hold")}</td>
-    <td><div class="row-actions">
+    <td><strong>${c.companyName}</strong>${statusBadge(c.isActive ? "Active" : "On Hold")}</td>
+    <td data-label="Contact">${c.contactPerson || "—"}</td>
+    <td data-label="Email">${c.email || "—"}</td>
+    <td data-label="Phone">${c.phone || "—"}</td>
+    <td data-label="" class="td-actions"><div class="row-actions">
       <button class="btn-icon" title="Statement" data-statement-client="${c.id}"><i class="fa-solid fa-file-lines"></i></button>
       <button class="btn-icon" title="Edit" data-edit-client="${c.id}"><i class="fa-solid fa-pen"></i></button>
       <button class="btn-icon danger" title="Delete" data-del-client="${c.id}"><i class="fa-solid fa-trash"></i></button>
     </div></td>
-  </tr>`).join("") : `<tr><td colspan="6" class="empty-row">No clients found</td></tr>`;
+  </tr>`).join("") : `<tr><td colspan="5" class="empty-row">No clients found</td></tr>`;
 
   document.querySelectorAll("[data-statement-client]").forEach(b => b.addEventListener("click", () => openStatementModal(b.dataset.statementClient)));
   document.querySelectorAll("[data-edit-client]").forEach(b => b.addEventListener("click", () => editClient(b.dataset.editClient)));
@@ -1195,19 +1194,18 @@ function renderProjectsTable() {
     const mCount = (p.milestones || []).length;
     const mLabel = mCount ? `<span style="font-size:11px;color:var(--text-3)">${mCount} milestone${mCount!==1?"s":""}</span>` : "—";
     return `<tr>
-      <td><strong>${p.projectName}</strong></td>
-      <td>${clientName(p.clientId)}</td>
-      <td><span style="font-size:12px;color:var(--text-2)">${p.serviceCategoryName || "—"}${p.serviceTypeName ? ` · ${p.serviceTypeName}` : ""}</span></td>
-      <td>${mLabel}</td>
-      <td>${statusBadge(p.status || "Active")}</td>
-      <td>${p.driveLink ? `<a href="${p.driveLink}" target="_blank" class="link-sm"><i class="fa-brands fa-google-drive"></i> Open</a>` : "—"}</td>
-      <td><div class="row-actions">
+      <td><strong>${p.projectName}</strong>${statusBadge(p.status || "Active")}</td>
+      <td data-label="Client">${clientName(p.clientId)}</td>
+      <td data-label="Service"><span style="font-size:12px;color:var(--text-2)">${p.serviceCategoryName || "—"}${p.serviceTypeName ? ` · ${p.serviceTypeName}` : ""}</span></td>
+      <td data-label="Milestones">${mLabel}</td>
+      <td data-label="Drive">${p.driveLink ? `<a href="${p.driveLink}" target="_blank" class="link-sm"><i class="fa-brands fa-google-drive"></i> Open</a>` : "—"}</td>
+      <td data-label="" class="td-actions"><div class="row-actions">
         <button class="btn-icon" title="Milestones" data-progress-proj="${p.id}"><i class="fa-solid fa-list-check"></i></button>
         <button class="btn-icon" title="Edit" data-edit-proj="${p.id}"><i class="fa-solid fa-pen"></i></button>
         <button class="btn-icon danger" title="Delete" data-del-proj="${p.id}"><i class="fa-solid fa-trash"></i></button>
       </div></td>
     </tr>`;
-  }).join("") : `<tr><td colspan="7" class="empty-row">No projects found</td></tr>`;
+  }).join("") : `<tr><td colspan="6" class="empty-row">No projects found</td></tr>`;
 
   document.querySelectorAll("[data-progress-proj]").forEach(b => b.addEventListener("click", () => openProgressModal(b.dataset.progressProj)));
   document.querySelectorAll("[data-edit-proj]").forEach(b  => b.addEventListener("click", () => openProjectModal(b.dataset.editProj)));
@@ -1260,18 +1258,17 @@ function renderInvoicesTable() {
     (!q || inv.invoiceNumber?.toLowerCase().includes(q) || clientName(inv.clientId).toLowerCase().includes(q)) &&
     (!status || inv.status === status));
   document.getElementById("invoicesTableBody").innerHTML = rows.length ? rows.map(inv => `<tr>
-    <td class="mono"><strong>${inv.invoiceNumber}</strong></td>
-    <td>${clientName(inv.clientId)}</td>
-    <td class="mono">${inv.dateIssued || "—"}</td>
-    <td class="mono">${inv.dueDate    || "—"}</td>
-    <td class="mono">${fmt(inv.grossTotal)}</td>
-    <td>${statusBadge(inv.status)}</td>
-    <td><div class="row-actions">
+    <td class="mono"><strong>${inv.invoiceNumber}</strong>${statusBadge(inv.status)}</td>
+    <td data-label="Client">${clientName(inv.clientId)}</td>
+    <td data-label="Issued" class="mono">${inv.dateIssued || "—"}</td>
+    <td data-label="Due" class="mono">${inv.dueDate    || "—"}</td>
+    <td data-label="Amount" class="mono">${fmt(inv.grossTotal)}</td>
+    <td data-label="" class="td-actions"><div class="row-actions">
       <button class="btn-icon" title="PDF" data-pdf-inv="${inv.id}"><i class="fa-solid fa-file-pdf"></i></button>
       <button class="btn-icon" title="Edit" data-edit-inv="${inv.id}"><i class="fa-solid fa-pen"></i></button>
       <button class="btn-icon danger" title="Delete" data-del-inv="${inv.id}"><i class="fa-solid fa-trash"></i></button>
     </div></td>
-  </tr>`).join("") : `<tr><td colspan="7" class="empty-row">No invoices found</td></tr>`;
+  </tr>`).join("") : `<tr><td colspan="6" class="empty-row">No invoices found</td></tr>`;
 
   document.querySelectorAll("[data-pdf-inv]").forEach(b  => b.addEventListener("click", () => printInvoicePDF(b.dataset.pdfInv)));
   document.querySelectorAll("[data-edit-inv]").forEach(b => b.addEventListener("click", () => editInvoice(b.dataset.editInv)));
@@ -1359,12 +1356,12 @@ function renderReceiptsTable() {
     !q || r.receiptNumber?.toLowerCase().includes(q) || clientName(r.clientId).toLowerCase().includes(q));
   document.getElementById("receiptsTableBody").innerHTML = rows.length ? rows.map(r => `<tr>
     <td class="mono"><strong>${r.receiptNumber}</strong></td>
-    <td class="mono">${r.invoiceNumber || "—"}</td>
-    <td>${clientName(r.clientId)}</td>
-    <td class="mono">${r.dateSettled || "—"}</td>
-    <td class="mono">${fmt(r.amountPaid)}</td>
-    <td>${r.paymentMethod || "—"}</td>
-    <td><div class="row-actions">
+    <td data-label="Invoice #" class="mono">${r.invoiceNumber || "—"}</td>
+    <td data-label="Client">${clientName(r.clientId)}</td>
+    <td data-label="Date" class="mono">${r.dateSettled || "—"}</td>
+    <td data-label="Amount" class="mono">${fmt(r.amountPaid)}</td>
+    <td data-label="Method">${r.paymentMethod || "—"}</td>
+    <td data-label="" class="td-actions"><div class="row-actions">
       <button class="btn-icon" data-pdf-rec="${r.id}"><i class="fa-solid fa-file-pdf"></i></button>
       <button class="btn-icon danger" data-del-rec="${r.id}"><i class="fa-solid fa-trash"></i></button>
     </div></td>
@@ -1416,18 +1413,17 @@ function renderQuotesTable() {
   const rows = cache.quotes.filter(qt =>
     !q || qt.quoteNumber?.toLowerCase().includes(q) || clientName(qt.clientId).toLowerCase().includes(q));
   document.getElementById("quotesTableBody").innerHTML = rows.length ? rows.map(qt => `<tr>
-    <td class="mono"><strong>${qt.quoteNumber}</strong></td>
-    <td>${clientName(qt.clientId)}</td>
-    <td class="mono">${qt.dateCreated || "—"}</td>
-    <td class="mono">${qt.validUntil  || "—"}</td>
-    <td class="mono">${fmt(qt.grossTotal)}</td>
-    <td>${statusBadge(qt.status || "PROPOSED")}</td>
-    <td><div class="row-actions">
+    <td class="mono"><strong>${qt.quoteNumber}</strong>${statusBadge(qt.status || "PROPOSED")}</td>
+    <td data-label="Client">${clientName(qt.clientId)}</td>
+    <td data-label="Date" class="mono">${qt.dateCreated || "—"}</td>
+    <td data-label="Valid Until" class="mono">${qt.validUntil  || "—"}</td>
+    <td data-label="Amount" class="mono">${fmt(qt.grossTotal)}</td>
+    <td data-label="" class="td-actions"><div class="row-actions">
       <button class="btn-icon" data-pdf-qt="${qt.id}"><i class="fa-solid fa-file-pdf"></i></button>
       ${qt.status === "PROPOSED" ? `<button class="btn-icon" title="Convert to Invoice" data-convert-qt="${qt.id}"><i class="fa-solid fa-wand-magic-sparkles"></i></button>` : ""}
       <button class="btn-icon danger" data-del-qt="${qt.id}"><i class="fa-solid fa-trash"></i></button>
     </div></td>
-  </tr>`).join("") : `<tr><td colspan="7" class="empty-row">No quotes found</td></tr>`;
+  </tr>`).join("") : `<tr><td colspan="6" class="empty-row">No quotes found</td></tr>`;
 
   document.querySelectorAll("[data-pdf-qt]").forEach(b    => b.addEventListener("click", () => printQuotePDF(b.dataset.pdfQt)));
   document.querySelectorAll("[data-convert-qt]").forEach(b=> b.addEventListener("click", () => convertQuoteToInvoice(b.dataset.convertQt)));
@@ -1584,25 +1580,23 @@ function renderClientDashboard() {
   document.getElementById("cStatProjects").textContent = myItems.projects().length;
   const tbody = document.getElementById("clientDashInvoices");
   tbody.innerHTML = invs.slice(0,5).map(inv => `<tr>
-    <td class="mono"><strong>${inv.invoiceNumber}</strong></td>
-    <td class="mono">${fmt(inv.grossTotal)}</td>
-    <td class="mono">${inv.dueDate || "—"}</td>
-    <td>${statusBadge(inv.status)}</td>
-    <td><button class="btn-icon" data-cpdf-inv="${inv.id}"><i class="fa-solid fa-download"></i></button></td>
-  </tr>`).join("") || `<tr><td colspan="5" class="empty-row">No invoices yet</td></tr>`;
+    <td class="mono"><strong>${inv.invoiceNumber}</strong>${statusBadge(inv.status)}</td>
+    <td data-label="Amount" class="mono">${fmt(inv.grossTotal)}</td>
+    <td data-label="Due" class="mono">${inv.dueDate || "—"}</td>
+    <td data-label="" class="td-actions"><button class="btn-icon" data-cpdf-inv="${inv.id}"><i class="fa-solid fa-download"></i></button></td>
+  </tr>`).join("") || `<tr><td colspan="4" class="empty-row">No invoices yet</td></tr>`;
   tbody.querySelectorAll("[data-cpdf-inv]").forEach(b => b.addEventListener("click", () => printInvoicePDF(b.dataset.cpdfInv)));
 }
 
 function renderClientInvoices() {
   const tbody = document.getElementById("clientInvoicesBody");
   tbody.innerHTML = myItems.invoices().map(inv => `<tr>
-    <td class="mono"><strong>${inv.invoiceNumber}</strong></td>
-    <td class="mono">${inv.dateIssued || "—"}</td>
-    <td class="mono">${inv.dueDate    || "—"}</td>
-    <td class="mono">${fmt(inv.grossTotal)}</td>
-    <td>${statusBadge(inv.status)}</td>
-    <td><button class="btn-icon" data-cpdf-inv="${inv.id}"><i class="fa-solid fa-download"></i></button></td>
-  </tr>`).join("") || `<tr><td colspan="6" class="empty-row">No invoices</td></tr>`;
+    <td class="mono"><strong>${inv.invoiceNumber}</strong>${statusBadge(inv.status)}</td>
+    <td data-label="Issued" class="mono">${inv.dateIssued || "—"}</td>
+    <td data-label="Due" class="mono">${inv.dueDate    || "—"}</td>
+    <td data-label="Amount" class="mono">${fmt(inv.grossTotal)}</td>
+    <td data-label="" class="td-actions"><button class="btn-icon" data-cpdf-inv="${inv.id}"><i class="fa-solid fa-download"></i></button></td>
+  </tr>`).join("") || `<tr><td colspan="5" class="empty-row">No invoices</td></tr>`;
   tbody.querySelectorAll("[data-cpdf-inv]").forEach(b => b.addEventListener("click", () => printInvoicePDF(b.dataset.cpdfInv)));
 }
 
@@ -1610,11 +1604,11 @@ function renderClientReceipts() {
   const tbody = document.getElementById("clientReceiptsBody");
   tbody.innerHTML = myItems.receipts().map(r => `<tr>
     <td class="mono"><strong>${r.receiptNumber}</strong></td>
-    <td class="mono">${r.invoiceNumber || "—"}</td>
-    <td class="mono">${r.dateSettled   || "—"}</td>
-    <td class="mono">${fmt(r.amountPaid)}</td>
-    <td>${r.paymentMethod || "—"}</td>
-    <td><button class="btn-icon" data-cpdf-rec="${r.id}"><i class="fa-solid fa-download"></i></button></td>
+    <td data-label="Invoice #" class="mono">${r.invoiceNumber || "—"}</td>
+    <td data-label="Date" class="mono">${r.dateSettled   || "—"}</td>
+    <td data-label="Amount" class="mono">${fmt(r.amountPaid)}</td>
+    <td data-label="Method">${r.paymentMethod || "—"}</td>
+    <td data-label="" class="td-actions"><button class="btn-icon" data-cpdf-rec="${r.id}"><i class="fa-solid fa-download"></i></button></td>
   </tr>`).join("") || `<tr><td colspan="6" class="empty-row">No receipts</td></tr>`;
   tbody.querySelectorAll("[data-cpdf-rec]").forEach(b => b.addEventListener("click", () => printReceiptPDF(b.dataset.cpdfRec)));
 }
@@ -1622,13 +1616,12 @@ function renderClientReceipts() {
 function renderClientQuotes() {
   const tbody = document.getElementById("clientQuotesBody");
   tbody.innerHTML = myItems.quotes().map(qt => `<tr>
-    <td class="mono"><strong>${qt.quoteNumber}</strong></td>
-    <td class="mono">${qt.dateCreated || "—"}</td>
-    <td class="mono">${qt.validUntil  || "—"}</td>
-    <td class="mono">${fmt(qt.grossTotal)}</td>
-    <td>${statusBadge(qt.status)}</td>
-    <td><button class="btn-icon" data-cpdf-qt="${qt.id}"><i class="fa-solid fa-download"></i></button></td>
-  </tr>`).join("") || `<tr><td colspan="6" class="empty-row">No quotes</td></tr>`;
+    <td class="mono"><strong>${qt.quoteNumber}</strong>${statusBadge(qt.status)}</td>
+    <td data-label="Date" class="mono">${qt.dateCreated || "—"}</td>
+    <td data-label="Valid Until" class="mono">${qt.validUntil  || "—"}</td>
+    <td data-label="Amount" class="mono">${fmt(qt.grossTotal)}</td>
+    <td data-label="" class="td-actions"><button class="btn-icon" data-cpdf-qt="${qt.id}"><i class="fa-solid fa-download"></i></button></td>
+  </tr>`).join("") || `<tr><td colspan="5" class="empty-row">No quotes</td></tr>`;
   tbody.querySelectorAll("[data-cpdf-qt]").forEach(b => b.addEventListener("click", () => printQuotePDF(b.dataset.cpdfQt)));
 }
 
