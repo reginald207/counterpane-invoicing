@@ -23,6 +23,7 @@ const firebaseConfig = {
   measurementId: "G-F69DVPN4SL"
 };
 
+
 const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = getFirestore(app);
@@ -187,6 +188,12 @@ function flagOverdueInvoices() {
     if (inv.status === "UNPAID" && new Date(inv.dueDate) < today) {
       inv.status = "OVERDUE";
       updateDoc(doc(db, "invoices", inv.id), { status: "OVERDUE" }).catch(() => {});
+      if (agencySettings.emailOverdue) {
+        const cl = cache.clients.find(c => c.id === inv.clientId);
+        if (cl?.email) sendBrevoEmail(cl.email, cl.companyName,
+          `Overdue Invoice ${inv.invoiceNumber} — Action Required`,
+          emailOverdueHTML(inv, cl));
+      }
     }
   });
 }
@@ -672,6 +679,24 @@ function bindStaticListeners() {
 
   // SETTINGS
   document.getElementById("settingsForm").addEventListener("submit", saveSettings);
+  document.getElementById("testEmailBtn").addEventListener("click", sendTestEmail);
+  document.getElementById("toggleBrevoKey").addEventListener("click", () => {
+    const inp = document.getElementById("settingBrevoKey");
+    const ico = document.querySelector("#toggleBrevoKey i");
+    inp.type = inp.type === "password" ? "text" : "password";
+    ico.className = inp.type === "password" ? "fa-solid fa-eye" : "fa-solid fa-eye-slash";
+  });
+
+  // EMAIL PREVIEW — confirm send
+  document.getElementById("confirmSendBtn").addEventListener("click", async () => {
+    if (!pendingEmail) return;
+    const { toEmail, toName, subject, htmlBody, pdfObj, ccEmail, logEntry } = pendingEmail;
+    closeModal("emailPreviewModal");
+    pendingEmail = null;
+    await sendBrevoEmail(toEmail, toName, subject, htmlBody,
+      { attachment: pdfObj, cc: ccEmail || undefined, logEntry });
+    toast(`Email sent to ${toEmail}`);
+  });
 
   // TEMPLATES
   document.getElementById("openAddTemplateBtn").addEventListener("click", () => openTemplateModal());
@@ -734,17 +759,20 @@ function renderClientsTable() {
   const rows = cache.clients.filter(c =>
     !q || c.companyName?.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q));
   document.getElementById("clientsTableBody").innerHTML = rows.length ? rows.map(c => `<tr>
-    <td><strong>${c.companyName}</strong>${statusBadge(c.isActive ? "Active" : "On Hold")}</td>
-    <td data-label="Contact">${c.contactPerson || "—"}</td>
-    <td data-label="Email">${c.email || "—"}</td>
-    <td data-label="Phone">${c.phone || "—"}</td>
-    <td data-label="" class="td-actions"><div class="row-actions">
+    <td><strong>${c.companyName}</strong></td>
+    <td>${c.contactPerson || "—"}</td>
+    <td>${c.email || "—"}</td>
+    <td>${c.phone || "—"}</td>
+    <td>${statusBadge(c.isActive ? "Active" : "On Hold")}</td>
+    <td><div class="row-actions">
+      <button class="btn-icon" title="Email History" data-emaillog-client="${c.id}"><i class="fa-solid fa-clock-rotate-left"></i></button>
       <button class="btn-icon" title="Statement" data-statement-client="${c.id}"><i class="fa-solid fa-file-lines"></i></button>
       <button class="btn-icon" title="Edit" data-edit-client="${c.id}"><i class="fa-solid fa-pen"></i></button>
       <button class="btn-icon danger" title="Delete" data-del-client="${c.id}"><i class="fa-solid fa-trash"></i></button>
     </div></td>
-  </tr>`).join("") : `<tr><td colspan="5" class="empty-row">No clients found</td></tr>`;
+  </tr>`).join("") : `<tr><td colspan="6" class="empty-row">No clients found</td></tr>`;
 
+  document.querySelectorAll("[data-emaillog-client]").forEach(b  => b.addEventListener("click", () => openEmailLog(b.dataset.emaillogClient)));
   document.querySelectorAll("[data-statement-client]").forEach(b => b.addEventListener("click", () => openStatementModal(b.dataset.statementClient)));
   document.querySelectorAll("[data-edit-client]").forEach(b => b.addEventListener("click", () => editClient(b.dataset.editClient)));
   document.querySelectorAll("[data-del-client]").forEach(b => b.addEventListener("click", () =>
@@ -809,6 +837,11 @@ async function saveClient(e) {
       closeModal("clientModal");
       renderClientsTable();
       toast("Client and portal account created");
+      if (agencySettings.emailWelcome) {
+        sendBrevoEmail(loginEmail, clientData.companyName,
+          `Welcome to the ${agencySettings.agencyName || "Counterpane"} Client Portal`,
+          emailWelcomeHTML(clientData, loginEmail));
+      }
     }
   } catch (err) {
     const msgs = {
@@ -1194,18 +1227,19 @@ function renderProjectsTable() {
     const mCount = (p.milestones || []).length;
     const mLabel = mCount ? `<span style="font-size:11px;color:var(--text-3)">${mCount} milestone${mCount!==1?"s":""}</span>` : "—";
     return `<tr>
-      <td><strong>${p.projectName}</strong>${statusBadge(p.status || "Active")}</td>
-      <td data-label="Client">${clientName(p.clientId)}</td>
-      <td data-label="Service"><span style="font-size:12px;color:var(--text-2)">${p.serviceCategoryName || "—"}${p.serviceTypeName ? ` · ${p.serviceTypeName}` : ""}</span></td>
-      <td data-label="Milestones">${mLabel}</td>
-      <td data-label="Drive">${p.driveLink ? `<a href="${p.driveLink}" target="_blank" class="link-sm"><i class="fa-brands fa-google-drive"></i> Open</a>` : "—"}</td>
-      <td data-label="" class="td-actions"><div class="row-actions">
+      <td><strong>${p.projectName}</strong></td>
+      <td>${clientName(p.clientId)}</td>
+      <td><span style="font-size:12px;color:var(--text-2)">${p.serviceCategoryName || "—"}${p.serviceTypeName ? ` · ${p.serviceTypeName}` : ""}</span></td>
+      <td>${mLabel}</td>
+      <td>${statusBadge(p.status || "Active")}</td>
+      <td>${p.driveLink ? `<a href="${p.driveLink}" target="_blank" class="link-sm"><i class="fa-brands fa-google-drive"></i> Open</a>` : "—"}</td>
+      <td><div class="row-actions">
         <button class="btn-icon" title="Milestones" data-progress-proj="${p.id}"><i class="fa-solid fa-list-check"></i></button>
         <button class="btn-icon" title="Edit" data-edit-proj="${p.id}"><i class="fa-solid fa-pen"></i></button>
         <button class="btn-icon danger" title="Delete" data-del-proj="${p.id}"><i class="fa-solid fa-trash"></i></button>
       </div></td>
     </tr>`;
-  }).join("") : `<tr><td colspan="6" class="empty-row">No projects found</td></tr>`;
+  }).join("") : `<tr><td colspan="7" class="empty-row">No projects found</td></tr>`;
 
   document.querySelectorAll("[data-progress-proj]").forEach(b => b.addEventListener("click", () => openProgressModal(b.dataset.progressProj)));
   document.querySelectorAll("[data-edit-proj]").forEach(b  => b.addEventListener("click", () => openProjectModal(b.dataset.editProj)));
@@ -1258,20 +1292,23 @@ function renderInvoicesTable() {
     (!q || inv.invoiceNumber?.toLowerCase().includes(q) || clientName(inv.clientId).toLowerCase().includes(q)) &&
     (!status || inv.status === status));
   document.getElementById("invoicesTableBody").innerHTML = rows.length ? rows.map(inv => `<tr>
-    <td class="mono"><strong>${inv.invoiceNumber}</strong>${statusBadge(inv.status)}</td>
-    <td data-label="Client">${clientName(inv.clientId)}</td>
-    <td data-label="Issued" class="mono">${inv.dateIssued || "—"}</td>
-    <td data-label="Due" class="mono">${inv.dueDate    || "—"}</td>
-    <td data-label="Amount" class="mono">${fmt(inv.grossTotal)}</td>
-    <td data-label="" class="td-actions"><div class="row-actions">
+    <td class="mono"><strong>${inv.invoiceNumber}</strong></td>
+    <td>${clientName(inv.clientId)}</td>
+    <td class="mono">${inv.dateIssued || "—"}</td>
+    <td class="mono">${inv.dueDate    || "—"}</td>
+    <td class="mono">${fmt(inv.grossTotal)}</td>
+    <td>${statusBadge(inv.status)}</td>
+    <td><div class="row-actions">
       <button class="btn-icon" title="PDF" data-pdf-inv="${inv.id}"><i class="fa-solid fa-file-pdf"></i></button>
+      <button class="btn-icon" title="Resend Email" data-resend-inv="${inv.id}"><i class="fa-solid fa-paper-plane"></i></button>
       <button class="btn-icon" title="Edit" data-edit-inv="${inv.id}"><i class="fa-solid fa-pen"></i></button>
       <button class="btn-icon danger" title="Delete" data-del-inv="${inv.id}"><i class="fa-solid fa-trash"></i></button>
     </div></td>
-  </tr>`).join("") : `<tr><td colspan="6" class="empty-row">No invoices found</td></tr>`;
+  </tr>`).join("") : `<tr><td colspan="7" class="empty-row">No invoices found</td></tr>`;
 
-  document.querySelectorAll("[data-pdf-inv]").forEach(b  => b.addEventListener("click", () => printInvoicePDF(b.dataset.pdfInv)));
-  document.querySelectorAll("[data-edit-inv]").forEach(b => b.addEventListener("click", () => editInvoice(b.dataset.editInv)));
+  document.querySelectorAll("[data-pdf-inv]").forEach(b    => b.addEventListener("click", () => printInvoicePDF(b.dataset.pdfInv)));
+  document.querySelectorAll("[data-resend-inv]").forEach(b => b.addEventListener("click", () => previewAndSendEmail("invoice", b.dataset.resendInv)));
+  document.querySelectorAll("[data-edit-inv]").forEach(b   => b.addEventListener("click", () => editInvoice(b.dataset.editInv)));
   document.querySelectorAll("[data-del-inv]").forEach(b  => b.addEventListener("click", () =>
     confirmAction("Delete this invoice?", () => deleteItem("invoices", b.dataset.delInv, "invoices", renderInvoicesTable))));
 }
@@ -1299,6 +1336,7 @@ async function saveInvoice(e) {
     status: existing?.status || "UNPAID",
     projectId:   document.getElementById("invoiceProjectTarget")?.value || "",
     paymentType: document.getElementById("invoicePaymentType")?.value   || "Full Payment",
+    ccEmail:     document.getElementById("invoiceCC")?.value.trim()     || "",
   };
   // Attach project details for PDF reference
   const proj = cache.projects.find(p => p.id === data.projectId);
@@ -1321,6 +1359,27 @@ async function saveInvoice(e) {
     renderInvoicesTable();
     renderAdminDashboard();
     toast(editId ? "Invoice updated" : "Invoice created");
+    // Auto-email client if toggle is on and this is a new invoice
+    // Sync contact to Brevo for automation workflows (due date → scheduled reminders)
+    if (!editId) {
+      const cl4sync = cache.clients.find(c => c.id === data.clientId);
+      if (cl4sync?.email) syncBrevoContact(cl4sync, {
+        INVOICE_NUMBER:   data.invoiceNumber,
+        INVOICE_DUE_DATE: data.dueDate,
+        INVOICE_AMOUNT:   String(data.grossTotal),
+      });
+    }
+    if (!editId && agencySettings.emailInvoice) {
+      const cl = cache.clients.find(c => c.id === data.clientId);
+      if (cl?.email) {
+        const invId2 = cache.invoices[0]?.id;
+        const subj   = resolveSubject(agencySettings.subjectInvoice || "Invoice {invoiceNumber} from {agencyName}", data);
+        printInvoicePDF(invId2, true).then(pdf =>
+          sendBrevoEmail(cl.email, cl.companyName, subj, emailInvoiceHTML(data, cl),
+            { attachment: pdf, cc: data.ccEmail, logEntry: { type:"invoice", clientId: data.clientId, docNumber: data.invoiceNumber } })
+        );
+      }
+    }
   } catch (err) { toast("Error: " + err.message, "error"); }
 }
 
@@ -1334,6 +1393,7 @@ function editInvoice(id) {
   document.getElementById("invoiceTaxRate").value  = inv.taxRate    || 0;
   document.getElementById("invoiceDiscount").value = inv.discount   || 0;
   document.getElementById("invoiceNotes").value    = inv.notes      || "";
+  if (document.getElementById("invoiceCC")) document.getElementById("invoiceCC").value = inv.ccEmail || "";
   // Restore payment type
   const ptEl = document.getElementById("invoicePaymentType");
   if (ptEl) ptEl.value = inv.paymentType || "Full Payment";
@@ -1356,19 +1416,21 @@ function renderReceiptsTable() {
     !q || r.receiptNumber?.toLowerCase().includes(q) || clientName(r.clientId).toLowerCase().includes(q));
   document.getElementById("receiptsTableBody").innerHTML = rows.length ? rows.map(r => `<tr>
     <td class="mono"><strong>${r.receiptNumber}</strong></td>
-    <td data-label="Invoice #" class="mono">${r.invoiceNumber || "—"}</td>
-    <td data-label="Client">${clientName(r.clientId)}</td>
-    <td data-label="Date" class="mono">${r.dateSettled || "—"}</td>
-    <td data-label="Amount" class="mono">${fmt(r.amountPaid)}</td>
-    <td data-label="Method">${r.paymentMethod || "—"}</td>
-    <td data-label="" class="td-actions"><div class="row-actions">
-      <button class="btn-icon" data-pdf-rec="${r.id}"><i class="fa-solid fa-file-pdf"></i></button>
-      <button class="btn-icon danger" data-del-rec="${r.id}"><i class="fa-solid fa-trash"></i></button>
+    <td class="mono">${r.invoiceNumber || "—"}</td>
+    <td>${clientName(r.clientId)}</td>
+    <td class="mono">${r.dateSettled || "—"}</td>
+    <td class="mono">${fmt(r.amountPaid)}</td>
+    <td>${r.paymentMethod || "—"}</td>
+    <td><div class="row-actions">
+      <button class="btn-icon" title="PDF" data-pdf-rec="${r.id}"><i class="fa-solid fa-file-pdf"></i></button>
+      <button class="btn-icon" title="Resend Email" data-resend-rec="${r.id}"><i class="fa-solid fa-paper-plane"></i></button>
+      <button class="btn-icon danger" title="Delete" data-del-rec="${r.id}"><i class="fa-solid fa-trash"></i></button>
     </div></td>
   </tr>`).join("") : `<tr><td colspan="7" class="empty-row">No receipts found</td></tr>`;
 
-  document.querySelectorAll("[data-pdf-rec]").forEach(b => b.addEventListener("click", () => printReceiptPDF(b.dataset.pdfRec)));
-  document.querySelectorAll("[data-del-rec]").forEach(b => b.addEventListener("click", () =>
+  document.querySelectorAll("[data-pdf-rec]").forEach(b    => b.addEventListener("click", () => printReceiptPDF(b.dataset.pdfRec)));
+  document.querySelectorAll("[data-resend-rec]").forEach(b => b.addEventListener("click", () => previewAndSendEmail("receipt", b.dataset.resendRec)));
+  document.querySelectorAll("[data-del-rec]").forEach(b    => b.addEventListener("click", () =>
     confirmAction("Delete this receipt?", () => deleteItem("receipts", b.dataset.delRec, "receipts", renderReceiptsTable))));
 }
 
@@ -1402,6 +1464,17 @@ async function saveReceipt(e) {
     renderReceiptsTable();
     renderAdminDashboard();
     toast("Receipt saved — invoice marked PAID");
+    if (agencySettings.emailReceipt) {
+      const cl = cache.clients.find(c => c.id === data.clientId);
+      if (cl?.email) {
+        const recId2 = cache.receipts[0]?.id;
+        const subj   = resolveSubject(agencySettings.subjectReceipt || "Payment Confirmed — {receiptNumber}", data);
+        printReceiptPDF(recId2, true).then(pdf =>
+          sendBrevoEmail(cl.email, cl.companyName, subj, emailReceiptHTML(data, cl),
+            { attachment: pdf, logEntry: { type:"receipt", clientId: data.clientId, docNumber: data.receiptNumber } })
+        );
+      }
+    }
   } catch (err) { toast("Error: " + err.message, "error"); }
 }
 
@@ -1413,20 +1486,23 @@ function renderQuotesTable() {
   const rows = cache.quotes.filter(qt =>
     !q || qt.quoteNumber?.toLowerCase().includes(q) || clientName(qt.clientId).toLowerCase().includes(q));
   document.getElementById("quotesTableBody").innerHTML = rows.length ? rows.map(qt => `<tr>
-    <td class="mono"><strong>${qt.quoteNumber}</strong>${statusBadge(qt.status || "PROPOSED")}</td>
-    <td data-label="Client">${clientName(qt.clientId)}</td>
-    <td data-label="Date" class="mono">${qt.dateCreated || "—"}</td>
-    <td data-label="Valid Until" class="mono">${qt.validUntil  || "—"}</td>
-    <td data-label="Amount" class="mono">${fmt(qt.grossTotal)}</td>
-    <td data-label="" class="td-actions"><div class="row-actions">
-      <button class="btn-icon" data-pdf-qt="${qt.id}"><i class="fa-solid fa-file-pdf"></i></button>
+    <td class="mono"><strong>${qt.quoteNumber}</strong></td>
+    <td>${clientName(qt.clientId)}</td>
+    <td class="mono">${qt.dateCreated || "—"}</td>
+    <td class="mono">${qt.validUntil  || "—"}</td>
+    <td class="mono">${fmt(qt.grossTotal)}</td>
+    <td>${statusBadge(qt.status || "PROPOSED")}</td>
+    <td><div class="row-actions">
+      <button class="btn-icon" title="PDF" data-pdf-qt="${qt.id}"><i class="fa-solid fa-file-pdf"></i></button>
+      <button class="btn-icon" title="Resend Email" data-resend-qt="${qt.id}"><i class="fa-solid fa-paper-plane"></i></button>
       ${qt.status === "PROPOSED" ? `<button class="btn-icon" title="Convert to Invoice" data-convert-qt="${qt.id}"><i class="fa-solid fa-wand-magic-sparkles"></i></button>` : ""}
       <button class="btn-icon danger" data-del-qt="${qt.id}"><i class="fa-solid fa-trash"></i></button>
     </div></td>
-  </tr>`).join("") : `<tr><td colspan="6" class="empty-row">No quotes found</td></tr>`;
+  </tr>`).join("") : `<tr><td colspan="7" class="empty-row">No quotes found</td></tr>`;
 
   document.querySelectorAll("[data-pdf-qt]").forEach(b    => b.addEventListener("click", () => printQuotePDF(b.dataset.pdfQt)));
-  document.querySelectorAll("[data-convert-qt]").forEach(b=> b.addEventListener("click", () => convertQuoteToInvoice(b.dataset.convertQt)));
+  document.querySelectorAll("[data-resend-qt]").forEach(b  => b.addEventListener("click", () => previewAndSendEmail("quote", b.dataset.resendQt)));
+  document.querySelectorAll("[data-convert-qt]").forEach(b => b.addEventListener("click", () => convertQuoteToInvoice(b.dataset.convertQt)));
   document.querySelectorAll("[data-del-qt]").forEach(b    => b.addEventListener("click", () =>
     confirmAction("Delete this quote?", () => deleteItem("quotes", b.dataset.delQt, "quotes", renderQuotesTable))));
 }
@@ -1452,6 +1528,17 @@ async function saveQuote(e) {
     closeModal("quoteModal");
     renderQuotesTable();
     toast("Quote created");
+    if (agencySettings.emailQuote) {
+      const cl = cache.clients.find(c => c.id === data.clientId);
+      if (cl?.email) {
+        const qtId2 = cache.quotes[0]?.id;
+        const subj  = resolveSubject(agencySettings.subjectQuote || "Quotation {quoteNumber} from {agencyName}", data);
+        printQuotePDF(qtId2, true).then(pdf =>
+          sendBrevoEmail(cl.email, cl.companyName, subj, emailQuoteHTML(data, cl),
+            { attachment: pdf, logEntry: { type:"quote", clientId: data.clientId, docNumber: data.quoteNumber } })
+        );
+      }
+    }
   } catch (err) { toast("Error: " + err.message, "error"); }
 }
 
@@ -1520,25 +1607,51 @@ function renderReports() {
 // SETTINGS
 // ═══════════════════════════════════════════════════════════
 function renderSettings() {
-  document.getElementById("settingAgencyName").value = agencySettings.agencyName || "";
-  document.getElementById("settingCurrency").value   = agencySettings.currency   || "";
-  document.getElementById("settingEmail").value      = agencySettings.email      || "";
-  document.getElementById("settingPhone").value      = agencySettings.phone      || "";
-  document.getElementById("settingAddress").value    = agencySettings.address    || "";
-  document.getElementById("settingLogoUrl").value    = agencySettings.logoUrl    || "";
-  document.getElementById("settingFooter").value     = agencySettings.footer     || "";
+  document.getElementById("settingAgencyName").value    = agencySettings.agencyName    || "";
+  document.getElementById("settingCurrency").value      = agencySettings.currency      || "";
+  document.getElementById("settingEmail").value         = agencySettings.email         || "";
+  document.getElementById("settingPhone").value         = agencySettings.phone         || "";
+  document.getElementById("settingAddress").value       = agencySettings.address       || "";
+  document.getElementById("settingLogoUrl").value       = agencySettings.logoUrl       || "";
+  document.getElementById("settingFooter").value        = agencySettings.footer        || "";
+  document.getElementById("settingBrevoKey").value      = agencySettings.brevoApiKey   || "";
+  document.getElementById("settingBrevoFromName").value = agencySettings.brevoFromName || "";
+  document.getElementById("settingBrevoFromEmail").value= agencySettings.brevoFromEmail|| "";
+  document.getElementById("emailToggleInvoice").checked = agencySettings.emailInvoice  || false;
+  document.getElementById("emailToggleReceipt").checked = agencySettings.emailReceipt  || false;
+  document.getElementById("emailToggleQuote").checked   = agencySettings.emailQuote    || false;
+  document.getElementById("emailToggleWelcome").checked = agencySettings.emailWelcome  || false;
+  document.getElementById("emailToggleOverdue").checked = agencySettings.emailOverdue  || false;
+  document.getElementById("subjectInvoice").value = agencySettings.subjectInvoice || "";
+  document.getElementById("subjectReceipt").value = agencySettings.subjectReceipt || "";
+  document.getElementById("subjectQuote").value   = agencySettings.subjectQuote   || "";
+  document.getElementById("subjectWelcome").value = agencySettings.subjectWelcome || "";
+  document.getElementById("subjectOverdue").value = agencySettings.subjectOverdue || "";
 }
 
 async function saveSettings(e) {
   e.preventDefault();
   const data = {
-    agencyName: document.getElementById("settingAgencyName").value.trim(),
-    currency:   document.getElementById("settingCurrency").value.trim() || "GHS",
-    email:      document.getElementById("settingEmail").value.trim(),
-    phone:      document.getElementById("settingPhone").value.trim(),
-    address:    document.getElementById("settingAddress").value.trim(),
-    logoUrl:    document.getElementById("settingLogoUrl").value.trim(),
-    footer:     document.getElementById("settingFooter").value.trim(),
+    agencyName:     document.getElementById("settingAgencyName").value.trim(),
+    currency:       document.getElementById("settingCurrency").value.trim() || "GHS",
+    email:          document.getElementById("settingEmail").value.trim(),
+    phone:          document.getElementById("settingPhone").value.trim(),
+    address:        document.getElementById("settingAddress").value.trim(),
+    logoUrl:        document.getElementById("settingLogoUrl").value.trim(),
+    footer:         document.getElementById("settingFooter").value.trim(),
+    brevoApiKey:    document.getElementById("settingBrevoKey").value.trim(),
+    brevoFromName:  document.getElementById("settingBrevoFromName").value.trim(),
+    brevoFromEmail: document.getElementById("settingBrevoFromEmail").value.trim(),
+    emailInvoice:   document.getElementById("emailToggleInvoice").checked,
+    emailReceipt:   document.getElementById("emailToggleReceipt").checked,
+    emailQuote:     document.getElementById("emailToggleQuote").checked,
+    emailWelcome:   document.getElementById("emailToggleWelcome").checked,
+    emailOverdue:   document.getElementById("emailToggleOverdue").checked,
+    subjectInvoice: document.getElementById("subjectInvoice").value.trim(),
+    subjectReceipt: document.getElementById("subjectReceipt").value.trim(),
+    subjectQuote:   document.getElementById("subjectQuote").value.trim(),
+    subjectWelcome: document.getElementById("subjectWelcome").value.trim(),
+    subjectOverdue: document.getElementById("subjectOverdue").value.trim(),
   };
   try {
     await setDoc(doc(db, "settings", "global"), data);
@@ -1580,23 +1693,25 @@ function renderClientDashboard() {
   document.getElementById("cStatProjects").textContent = myItems.projects().length;
   const tbody = document.getElementById("clientDashInvoices");
   tbody.innerHTML = invs.slice(0,5).map(inv => `<tr>
-    <td class="mono"><strong>${inv.invoiceNumber}</strong>${statusBadge(inv.status)}</td>
-    <td data-label="Amount" class="mono">${fmt(inv.grossTotal)}</td>
-    <td data-label="Due" class="mono">${inv.dueDate || "—"}</td>
-    <td data-label="" class="td-actions"><button class="btn-icon" data-cpdf-inv="${inv.id}"><i class="fa-solid fa-download"></i></button></td>
-  </tr>`).join("") || `<tr><td colspan="4" class="empty-row">No invoices yet</td></tr>`;
+    <td class="mono"><strong>${inv.invoiceNumber}</strong></td>
+    <td class="mono">${fmt(inv.grossTotal)}</td>
+    <td class="mono">${inv.dueDate || "—"}</td>
+    <td>${statusBadge(inv.status)}</td>
+    <td><button class="btn-icon" data-cpdf-inv="${inv.id}"><i class="fa-solid fa-download"></i></button></td>
+  </tr>`).join("") || `<tr><td colspan="5" class="empty-row">No invoices yet</td></tr>`;
   tbody.querySelectorAll("[data-cpdf-inv]").forEach(b => b.addEventListener("click", () => printInvoicePDF(b.dataset.cpdfInv)));
 }
 
 function renderClientInvoices() {
   const tbody = document.getElementById("clientInvoicesBody");
   tbody.innerHTML = myItems.invoices().map(inv => `<tr>
-    <td class="mono"><strong>${inv.invoiceNumber}</strong>${statusBadge(inv.status)}</td>
-    <td data-label="Issued" class="mono">${inv.dateIssued || "—"}</td>
-    <td data-label="Due" class="mono">${inv.dueDate    || "—"}</td>
-    <td data-label="Amount" class="mono">${fmt(inv.grossTotal)}</td>
-    <td data-label="" class="td-actions"><button class="btn-icon" data-cpdf-inv="${inv.id}"><i class="fa-solid fa-download"></i></button></td>
-  </tr>`).join("") || `<tr><td colspan="5" class="empty-row">No invoices</td></tr>`;
+    <td class="mono"><strong>${inv.invoiceNumber}</strong></td>
+    <td class="mono">${inv.dateIssued || "—"}</td>
+    <td class="mono">${inv.dueDate    || "—"}</td>
+    <td class="mono">${fmt(inv.grossTotal)}</td>
+    <td>${statusBadge(inv.status)}</td>
+    <td><button class="btn-icon" data-cpdf-inv="${inv.id}"><i class="fa-solid fa-download"></i></button></td>
+  </tr>`).join("") || `<tr><td colspan="6" class="empty-row">No invoices</td></tr>`;
   tbody.querySelectorAll("[data-cpdf-inv]").forEach(b => b.addEventListener("click", () => printInvoicePDF(b.dataset.cpdfInv)));
 }
 
@@ -1604,11 +1719,11 @@ function renderClientReceipts() {
   const tbody = document.getElementById("clientReceiptsBody");
   tbody.innerHTML = myItems.receipts().map(r => `<tr>
     <td class="mono"><strong>${r.receiptNumber}</strong></td>
-    <td data-label="Invoice #" class="mono">${r.invoiceNumber || "—"}</td>
-    <td data-label="Date" class="mono">${r.dateSettled   || "—"}</td>
-    <td data-label="Amount" class="mono">${fmt(r.amountPaid)}</td>
-    <td data-label="Method">${r.paymentMethod || "—"}</td>
-    <td data-label="" class="td-actions"><button class="btn-icon" data-cpdf-rec="${r.id}"><i class="fa-solid fa-download"></i></button></td>
+    <td class="mono">${r.invoiceNumber || "—"}</td>
+    <td class="mono">${r.dateSettled   || "—"}</td>
+    <td class="mono">${fmt(r.amountPaid)}</td>
+    <td>${r.paymentMethod || "—"}</td>
+    <td><button class="btn-icon" data-cpdf-rec="${r.id}"><i class="fa-solid fa-download"></i></button></td>
   </tr>`).join("") || `<tr><td colspan="6" class="empty-row">No receipts</td></tr>`;
   tbody.querySelectorAll("[data-cpdf-rec]").forEach(b => b.addEventListener("click", () => printReceiptPDF(b.dataset.cpdfRec)));
 }
@@ -1616,12 +1731,13 @@ function renderClientReceipts() {
 function renderClientQuotes() {
   const tbody = document.getElementById("clientQuotesBody");
   tbody.innerHTML = myItems.quotes().map(qt => `<tr>
-    <td class="mono"><strong>${qt.quoteNumber}</strong>${statusBadge(qt.status)}</td>
-    <td data-label="Date" class="mono">${qt.dateCreated || "—"}</td>
-    <td data-label="Valid Until" class="mono">${qt.validUntil  || "—"}</td>
-    <td data-label="Amount" class="mono">${fmt(qt.grossTotal)}</td>
-    <td data-label="" class="td-actions"><button class="btn-icon" data-cpdf-qt="${qt.id}"><i class="fa-solid fa-download"></i></button></td>
-  </tr>`).join("") || `<tr><td colspan="5" class="empty-row">No quotes</td></tr>`;
+    <td class="mono"><strong>${qt.quoteNumber}</strong></td>
+    <td class="mono">${qt.dateCreated || "—"}</td>
+    <td class="mono">${qt.validUntil  || "—"}</td>
+    <td class="mono">${fmt(qt.grossTotal)}</td>
+    <td>${statusBadge(qt.status)}</td>
+    <td><button class="btn-icon" data-cpdf-qt="${qt.id}"><i class="fa-solid fa-download"></i></button></td>
+  </tr>`).join("") || `<tr><td colspan="6" class="empty-row">No quotes</td></tr>`;
   tbody.querySelectorAll("[data-cpdf-qt]").forEach(b => b.addEventListener("click", () => printQuotePDF(b.dataset.cpdfQt)));
 }
 
@@ -1997,8 +2113,8 @@ function pdfFooter(d, y) {
   }
 }
 
-async function printInvoicePDF(id) {
-  const inv = cache.invoices.find(i => i.id === id); if (!inv) return;
+async function printInvoicePDF(id, returnBase64 = false) {
+  const inv = cache.invoices.find(i => i.id === id); if (!inv) return null;
   const { jsPDF } = window.jspdf;
   const d = new jsPDF();
   let y = await pdfHeader(d, "INVOICE", inv.invoiceNumber);
@@ -2011,11 +2127,13 @@ async function printInvoicePDF(id) {
     d.text("Note: " + inv.notes, 16, y); y += 8;
   }
   pdfFooter(d, y + 4);
+  if (returnBase64) return { base64: d.output("datauristring").split(",")[1], filename: `${inv.invoiceNumber}.pdf` };
   d.save(`${inv.invoiceNumber}.pdf`);
+  return null;
 }
 
-async function printReceiptPDF(id) {
-  const r = cache.receipts.find(r => r.id === id); if (!r) return;
+async function printReceiptPDF(id, returnBase64 = false) {
+  const r = cache.receipts.find(r => r.id === id); if (!r) return null;
   const { jsPDF } = window.jspdf;
   const d = new jsPDF();
   const W = 210, m = 16;
@@ -2070,11 +2188,13 @@ async function printReceiptPDF(id) {
   d.text(pdfFmt(r.amountPaid), W - m - 4, y + 9.5, { align: "right" });
 
   pdfFooter(d, y + 22);
+  if (returnBase64) return { base64: d.output("datauristring").split(",")[1], filename: `${r.receiptNumber}.pdf` };
   d.save(`${r.receiptNumber}.pdf`);
+  return null;
 }
 
-async function printQuotePDF(id) {
-  const qt = cache.quotes.find(q => q.id === id); if (!qt) return;
+async function printQuotePDF(id, returnBase64 = false) {
+  const qt = cache.quotes.find(q => q.id === id); if (!qt) return null;
   const { jsPDF } = window.jspdf;
   const d = new jsPDF();
   let y = await pdfHeader(d, "QUOTATION", qt.quoteNumber);
@@ -2085,7 +2205,9 @@ async function printQuotePDF(id) {
   y = pdfItems(d, y, qt.items || []);
   y = pdfTotals(d, y, { ...qt, discountAmount: 0 });
   pdfFooter(d, y + 4);
+  if (returnBase64) return { base64: d.output("datauristring").split(",")[1], filename: `${qt.quoteNumber}.pdf` };
   d.save(`${qt.quoteNumber}.pdf`);
+  return null;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2368,4 +2490,517 @@ async function generateStatement(e) {
   d.save(`Statement_${client.companyName?.replace(/\s+/g,"_") || clientId}_${fromDate}_${toDate}.pdf`);
   closeModal("statementModal");
   toast("Statement downloaded");
+}
+
+// ═══════════════════════════════════════════════════════════
+// BREVO EMAIL ENGINE
+// ═══════════════════════════════════════════════════════════
+
+// ── Core send function ────────────────────────────────────
+async function sendBrevoEmail(toEmail, toName, subject, htmlContent, options = {}) {
+  const apiKey    = agencySettings.brevoApiKey?.trim();
+  const fromEmail = agencySettings.brevoFromEmail?.trim() || agencySettings.email?.trim();
+  const fromName  = agencySettings.brevoFromName?.trim()  || agencySettings.agencyName || "Counterpane";
+  const { attachment, cc, logEntry } = options;
+
+  if (!apiKey)    { console.warn("[Brevo] Skipped — no API key in Settings."); return; }
+  if (!fromEmail) { console.warn("[Brevo] Skipped — no sender email in Settings."); return; }
+  if (!toEmail)   { console.warn("[Brevo] Skipped — recipient has no email on file."); return; }
+
+  const body = {
+    sender: { name: fromName, email: fromEmail },
+    to: [{ email: toEmail, name: toName || toEmail }],
+    subject, htmlContent,
+  };
+  if (cc)         body.cc         = [{ email: cc }];
+  if (attachment) body.attachment = [{ content: attachment.base64, name: attachment.filename }];
+
+  try {
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: { "api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (res.ok) {
+      console.log(`[Brevo] ✓ Sent to ${toEmail}: "${subject}"`);
+      // Log to Firestore
+      if (logEntry) logEmail({ ...logEntry, toEmail, subject, status: "sent" });
+    } else {
+      const err = await res.json().catch(() => ({}));
+      console.warn(`[Brevo] ✗ Failed (${res.status}):`, err.message || JSON.stringify(err));
+      toast(`Email failed: ${err.message || "Check your Brevo API key and sender email."}`, "warning");
+      if (logEntry) logEmail({ ...logEntry, toEmail, subject, status: "failed" });
+    }
+  } catch (err) {
+    console.warn("[Brevo] Network error:", err.message);
+    if (logEntry) logEmail({ ...logEntry, toEmail, subject, status: "failed" });
+  }
+}
+
+async function sendTestEmail() {
+  const apiKey    = document.getElementById("settingBrevoKey").value.trim();
+  const fromEmail = document.getElementById("settingBrevoFromEmail").value.trim();
+  const fromName  = document.getElementById("settingBrevoFromName").value.trim() ||
+                    document.getElementById("settingAgencyName").value.trim() || "Counterpane";
+  const toEmail   = fromEmail || agencySettings.email;
+
+  if (!apiKey)    { toast("Enter your Brevo API key first", "warning"); return; }
+  if (!fromEmail) { toast("Enter a sender email first", "warning"); return; }
+
+  toast("Sending test email…", "warning");
+  try {
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: { "api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sender: { name: fromName, email: fromEmail },
+        to: [{ email: toEmail, name: fromName }],
+        subject: "✅ Counterpane — Email Integration Working",
+        htmlContent: emailBaseHTML(`
+          <h2 style="color:#0f3d2e;margin:0 0 12px">Test Email Successful</h2>
+          <p style="color:#475569;line-height:1.6">Your Brevo integration is configured correctly.
+          Automated emails will now be sent from <strong>${fromEmail}</strong> when triggered.</p>
+          <p style="color:#475569;line-height:1.6;margin-top:12px">
+            You can now enable the auto-send toggles in Settings.</p>
+        `),
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      toast(`Test email sent to ${toEmail}`, "success");
+    } else {
+      toast(`Test failed: ${data.message || "Check your API key and sender email"}`, "error");
+    }
+  } catch (err) {
+    toast("Network error: " + err.message, "error");
+  }
+}
+
+// ── Base HTML wrapper (all emails share this) ─────────────
+function emailBaseHTML(content) {
+  const agency  = agencySettings.agencyName || "Counterpane";
+  const year    = new Date().getFullYear();
+  const contact = [agencySettings.email, agencySettings.phone].filter(Boolean).join("  |  ");
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${agency}</title></head>
+<body style="margin:0;padding:0;background:#f0fdf4;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased">
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#f0fdf4;padding:32px 16px">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+        style="max-width:580px;background:#ffffff;border-radius:12px;overflow:hidden;
+               box-shadow:0 4px 24px rgba(15,61,46,.10)">
+        <!-- Header -->
+        <tr><td style="background:#0f3d2e;padding:24px 32px;line-height:1">
+          <span style="font-size:20px;font-weight:700;color:#ffffff;letter-spacing:-.3px">${agency}</span>
+        </td></tr>
+        <!-- Body -->
+        <tr><td style="padding:32px;color:#0f172a;font-size:15px;line-height:1.6">
+          ${content}
+        </td></tr>
+        <!-- Footer -->
+        <tr><td style="background:#f0fdf4;padding:18px 32px;border-top:1px solid #dcfce7;text-align:center">
+          <p style="margin:0;font-size:12px;color:#94a3b8">&copy; ${year} ${agency}</p>
+          ${contact ? `<p style="margin:4px 0 0;font-size:12px;color:#94a3b8">${contact}</p>` : ""}
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+}
+
+// ── Shared helpers ────────────────────────────────────────
+function emailBtn(text, url = "#") {
+  return `<a href="${url}" style="display:inline-block;background:#16a34a;color:#ffffff;
+    font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;
+    text-decoration:none;margin-top:20px">${text}</a>`;
+}
+
+function emailDivider() {
+  return `<hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">`;
+}
+
+function emailDataRow(label, value, highlight = false) {
+  return `<tr>
+    <td style="padding:8px 12px;font-size:13px;color:#64748b;border-bottom:1px solid #f1f5f9;
+      white-space:nowrap">${label}</td>
+    <td style="padding:8px 12px;font-size:13px;font-weight:${highlight?"700":"500"};
+      color:${highlight?"#16a34a":"#0f172a"};border-bottom:1px solid #f1f5f9;
+      text-align:right">${value}</td>
+  </tr>`;
+}
+
+function emailTable(rows) {
+  return `<table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+    style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-top:16px">
+    ${rows.join("")}
+  </table>`;
+}
+
+// ── Invoice email ─────────────────────────────────────────
+function emailInvoiceHTML(inv, client) {
+  const agency = agencySettings.agencyName || "Counterpane";
+  const items  = (inv.items || []).map(i =>
+    `<tr><td style="padding:7px 12px;font-size:13px;color:#374151;border-bottom:1px solid #f1f5f9">${i.description}</td>
+     <td style="padding:7px 12px;font-size:13px;color:#374151;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap">${fmt(i.total)}</td></tr>`
+  ).join("");
+
+  return emailBaseHTML(`
+    <p style="margin:0 0 6px;font-size:13px;color:#64748b;text-transform:uppercase;letter-spacing:.5px">Invoice</p>
+    <h2 style="margin:0 0 4px;font-size:22px;font-weight:700;color:#0f172a;letter-spacing:-.3px">${inv.invoiceNumber}</h2>
+    <p style="margin:0 0 24px;color:#64748b">From <strong>${agency}</strong></p>
+
+    <p style="margin:0 0 16px;color:#475569">Dear <strong>${client.companyName}</strong>,</p>
+    <p style="margin:0 0 24px;color:#475569">Please find your invoice details below. 
+    Payment is due by <strong>${inv.dueDate || "the date indicated"}</strong>.</p>
+
+    ${emailTable([
+      emailDataRow("Invoice Number", `<span style="font-family:monospace">${inv.invoiceNumber}</span>`),
+      emailDataRow("Date Issued",    inv.dateIssued || "—"),
+      emailDataRow("Due Date",       `<strong>${inv.dueDate || "—"}</strong>`),
+      emailDataRow("Payment Type",   inv.paymentType || "Full Payment"),
+    ])}
+
+    ${items ? `
+    <p style="margin:20px 0 8px;font-size:13px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.5px">Line Items</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+      ${items}
+      ${inv.taxAmount > 0 ? `<tr><td style="padding:7px 12px;font-size:13px;color:#64748b;border-bottom:1px solid #f1f5f9">Tax / VAT</td>
+        <td style="padding:7px 12px;font-size:13px;text-align:right;border-bottom:1px solid #f1f5f9">${fmt(inv.taxAmount)}</td></tr>` : ""}
+      <tr style="background:#f0fdf4">
+        <td style="padding:10px 12px;font-size:14px;font-weight:700;color:#0f172a">Total Due</td>
+        <td style="padding:10px 12px;font-size:16px;font-weight:700;color:#16a34a;text-align:right">${fmt(inv.grossTotal)}</td>
+      </tr>
+    </table>` : ""}
+
+    ${inv.notes ? `${emailDivider()}<p style="margin:0;font-size:13px;color:#64748b;font-style:italic">${inv.notes}</p>` : ""}
+    ${emailDivider()}
+    <p style="margin:0;font-size:13px;color:#94a3b8">
+      If you have any questions, please contact us at ${agencySettings.email || agency}.
+    </p>
+  `);
+}
+
+// ── Receipt email ─────────────────────────────────────────
+function emailReceiptHTML(rec, client) {
+  const agency = agencySettings.agencyName || "Counterpane";
+  return emailBaseHTML(`
+    <p style="margin:0 0 6px;font-size:13px;color:#64748b;text-transform:uppercase;letter-spacing:.5px">Payment Confirmation</p>
+    <h2 style="margin:0 0 4px;font-size:22px;font-weight:700;color:#0f172a;letter-spacing:-.3px">${rec.receiptNumber}</h2>
+    <p style="margin:0 0 24px;color:#64748b">From <strong>${agency}</strong></p>
+
+    <div style="background:#f0fdf4;border:1px solid #dcfce7;border-radius:10px;padding:20px;text-align:center;margin-bottom:24px">
+      <p style="margin:0 0 4px;font-size:13px;color:#16a34a;font-weight:600">AMOUNT RECEIVED</p>
+      <p style="margin:0;font-size:32px;font-weight:700;color:#0f172a;letter-spacing:-1px">${fmt(rec.amountPaid)}</p>
+    </div>
+
+    <p style="margin:0 0 16px;color:#475569">Dear <strong>${client.companyName}</strong>,</p>
+    <p style="margin:0 0 24px;color:#475569">
+      Thank you — we have received your payment. Your transaction details are below.</p>
+
+    ${emailTable([
+      emailDataRow("Receipt Number",  `<span style="font-family:monospace">${rec.receiptNumber}</span>`),
+      emailDataRow("For Invoice",     `<span style="font-family:monospace">${rec.invoiceNumber || "—"}</span>`),
+      emailDataRow("Payment Date",    rec.dateSettled || "—"),
+      emailDataRow("Payment Type",    rec.paymentType   || "—"),
+      emailDataRow("Payment Method",  rec.paymentMethod || "—"),
+      ...(rec.notes ? [emailDataRow("Reference", rec.notes)] : []),
+      emailDataRow("Amount Confirmed", fmt(rec.amountPaid), true),
+    ])}
+
+    ${emailDivider()}
+    <p style="margin:0;font-size:13px;color:#94a3b8">
+      Please keep this email as your payment record. Contact us at ${agencySettings.email || agency} for any queries.
+    </p>
+  `);
+}
+
+// ── Quote email ───────────────────────────────────────────
+function emailQuoteHTML(qt, client) {
+  const agency = agencySettings.agencyName || "Counterpane";
+  const items  = (qt.items || []).map(i =>
+    `<tr><td style="padding:7px 12px;font-size:13px;color:#374151;border-bottom:1px solid #f1f5f9">${i.description}</td>
+     <td style="padding:7px 12px;font-size:13px;text-align:right;border-bottom:1px solid #f1f5f9;white-space:nowrap">${fmt(i.total)}</td></tr>`
+  ).join("");
+
+  return emailBaseHTML(`
+    <p style="margin:0 0 6px;font-size:13px;color:#64748b;text-transform:uppercase;letter-spacing:.5px">Quotation</p>
+    <h2 style="margin:0 0 4px;font-size:22px;font-weight:700;color:#0f172a;letter-spacing:-.3px">${qt.quoteNumber}</h2>
+    <p style="margin:0 0 24px;color:#64748b">From <strong>${agency}</strong></p>
+
+    <p style="margin:0 0 16px;color:#475569">Dear <strong>${client.companyName}</strong>,</p>
+    <p style="margin:0 0 24px;color:#475569">
+      Please find your quotation details below. This quote is valid until 
+      <strong>${qt.validUntil || "the date indicated"}</strong>.</p>
+
+    ${emailTable([
+      emailDataRow("Quote Number",  `<span style="font-family:monospace">${qt.quoteNumber}</span>`),
+      emailDataRow("Date",          qt.dateCreated || "—"),
+      emailDataRow("Valid Until",   `<strong>${qt.validUntil || "—"}</strong>`),
+    ])}
+
+    ${items ? `
+    <p style="margin:20px 0 8px;font-size:13px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.5px">Scope of Work</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+      ${items}
+      ${qt.taxAmount > 0 ? `<tr><td style="padding:7px 12px;font-size:13px;color:#64748b;border-bottom:1px solid #f1f5f9">Tax / VAT</td>
+        <td style="padding:7px 12px;font-size:13px;text-align:right;border-bottom:1px solid #f1f5f9">${fmt(qt.taxAmount)}</td></tr>` : ""}
+      <tr style="background:#f0fdf4">
+        <td style="padding:10px 12px;font-size:14px;font-weight:700;color:#0f172a">Quoted Total</td>
+        <td style="padding:10px 12px;font-size:16px;font-weight:700;color:#16a34a;text-align:right">${fmt(qt.grossTotal)}</td>
+      </tr>
+    </table>` : ""}
+
+    ${emailDivider()}
+    <p style="margin:0 0 16px;color:#475569;font-size:14px">
+      To accept this quote or ask any questions, please contact us:</p>
+    <p style="margin:0;font-size:13px;color:#94a3b8">${agencySettings.email || agency}  ·  ${agencySettings.phone || ""}</p>
+  `);
+}
+
+// ── Welcome email (new client account) ───────────────────
+function emailWelcomeHTML(clientData, loginEmail) {
+  const agency  = agencySettings.agencyName || "Counterpane";
+  return emailBaseHTML(`
+    <h2 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a;letter-spacing:-.3px">
+      Welcome to ${agency}</h2>
+
+    <p style="margin:0 0 16px;color:#475569">Dear <strong>${clientData.companyName}</strong>,</p>
+    <p style="margin:0 0 24px;color:#475569">
+      Your client portal account has been created. You can log in to view your invoices, 
+      receipts, quotes, and project updates.</p>
+
+    <div style="background:#f0fdf4;border:1px solid #dcfce7;border-radius:10px;padding:20px;margin-bottom:24px">
+      <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#16a34a;text-transform:uppercase;letter-spacing:.5px">Your Login Details</p>
+      <p style="margin:0 0 6px;font-size:14px;color:#0f172a">
+        <strong>Email:</strong> ${loginEmail}</p>
+      <p style="margin:0;font-size:13px;color:#64748b">
+        Your password was provided by your account manager. You can change it after logging in 
+        under <em>Change Password</em> in the portal.</p>
+    </div>
+
+    <p style="margin:0 0 8px;font-size:14px;color:#475569">Through your portal you can:</p>
+    <ul style="margin:0 0 24px;padding-left:20px;color:#475569;font-size:14px;line-height:1.8">
+      <li>Download invoices and receipts as PDFs</li>
+      <li>View quotes and project progress</li>
+      <li>Access your project files on Google Drive</li>
+      <li>Track your payment history</li>
+    </ul>
+
+    ${emailDivider()}
+    <p style="margin:0;font-size:13px;color:#94a3b8">
+      Need help? Contact us at ${agencySettings.email || agency}.
+    </p>
+  `);
+}
+
+// ── Overdue reminder email ────────────────────────────────
+function emailOverdueHTML(inv, client) {
+  const agency = agencySettings.agencyName || "Counterpane";
+  const days   = Math.floor((Date.now() - new Date(inv.dueDate)) / 86400000);
+  return emailBaseHTML(`
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:16px 20px;margin-bottom:24px">
+      <p style="margin:0;font-size:14px;font-weight:600;color:#dc2626">
+        ⚠️ Invoice ${inv.invoiceNumber} is ${days} day${days!==1?"s":""} overdue
+      </p>
+    </div>
+
+    <p style="margin:0 0 16px;color:#475569">Dear <strong>${client.companyName}</strong>,</p>
+    <p style="margin:0 0 24px;color:#475569">
+      This is a reminder that invoice <strong>${inv.invoiceNumber}</strong> was due on 
+      <strong>${inv.dueDate}</strong> and remains unpaid. Please arrange payment at your earliest convenience.</p>
+
+    ${emailTable([
+      emailDataRow("Invoice Number", `<span style="font-family:monospace">${inv.invoiceNumber}</span>`),
+      emailDataRow("Due Date",       `<strong style="color:#dc2626">${inv.dueDate}</strong>`),
+      emailDataRow("Days Overdue",   `<strong style="color:#dc2626">${days} day${days!==1?"s":""}</strong>`),
+      emailDataRow("Amount Due",     fmt(inv.grossTotal), true),
+    ])}
+
+    ${emailDivider()}
+    <p style="margin:0 0 12px;color:#475569;font-size:14px">
+      If payment has already been made, please disregard this notice. 
+      For any questions, contact us:</p>
+    <p style="margin:0;font-size:13px;color:#94a3b8">${agencySettings.email || agency}  ·  ${agencySettings.phone || ""}</p>
+  `);
+}
+
+// ═══════════════════════════════════════════════════════════
+// EMAIL AUTOMATION IMPROVEMENTS
+// ═══════════════════════════════════════════════════════════
+
+// ── Subject line template resolver ───────────────────────
+function resolveSubject(template, data) {
+  const agency = agencySettings.agencyName || "Counterpane";
+  return (template || "")
+    .replace(/\{invoiceNumber\}/g, data.invoiceNumber || "")
+    .replace(/\{receiptNumber\}/g,  data.receiptNumber  || "")
+    .replace(/\{quoteNumber\}/g,    data.quoteNumber    || "")
+    .replace(/\{agencyName\}/g,     agency)
+    .replace(/\{clientName\}/g,     data.clientName     || "")
+    .replace(/\{amount\}/g,         data.grossTotal ? fmt(data.grossTotal) : "")
+    || template; // fallback to raw template if result is empty
+}
+
+// ── Email delivery log ────────────────────────────────────
+async function logEmail(entry) {
+  try {
+    await addDoc(collection(db, "emailLogs"), {
+      clientId:  entry.clientId  || "",
+      type:      entry.type      || "manual",
+      docNumber: entry.docNumber || "",
+      toEmail:   entry.toEmail   || "",
+      subject:   entry.subject   || "",
+      status:    entry.status    || "sent",
+      sentAt:    today(),
+      timestamp: Date.now(),
+    });
+  } catch (err) {
+    console.warn("[EmailLog] Could not save log:", err.message);
+  }
+}
+
+async function openEmailLog(clientId) {
+  const c = cache.clients.find(c => c.id === clientId);
+  document.getElementById("emailLogTitle").innerHTML =
+    `<i class="fa-solid fa-clock-rotate-left" style="color:var(--green-600);margin-right:6px"></i>Email History — ${c?.companyName || "Client"}`;
+  document.getElementById("emailLogContent").innerHTML =
+    `<p style="color:var(--text-3);font-size:13px">Loading…</p>`;
+  openModal("emailLogModal");
+
+  try {
+    const snap = await getDocs(
+      query(collection(db, "emailLogs"),
+        where("clientId", "==", clientId),
+        orderBy("timestamp", "desc"))
+    );
+    const logs = snap.docs.map(d => d.data());
+    const content = document.getElementById("emailLogContent");
+
+    if (!logs.length) {
+      content.innerHTML = `<p style="color:var(--text-3);font-size:13px;text-align:center;padding:20px">
+        No emails sent to this client yet.</p>`;
+      return;
+    }
+
+    const iconMap = { invoice:"fa-file-invoice", receipt:"fa-receipt", quote:"fa-file-contract",
+      welcome:"fa-door-open", overdue:"fa-triangle-exclamation", test:"fa-flask", manual:"fa-paper-plane" };
+
+    content.innerHTML = `<div class="email-log-list">
+      ${logs.map(log => `
+        <div class="email-log-item">
+          <div class="email-log-icon ${log.type}">
+            <i class="fa-solid ${iconMap[log.type] || "fa-envelope"}"></i>
+          </div>
+          <div class="email-log-body">
+            <div class="email-log-subj">${log.subject || "—"}</div>
+            <div class="email-log-meta">
+              To: ${log.toEmail || "—"} &nbsp;·&nbsp;
+              ${log.docNumber ? `${log.docNumber} &nbsp;·&nbsp;` : ""}
+              ${log.sentAt || "—"}
+            </div>
+          </div>
+          <div class="email-log-status">
+            <span class="badge ${log.status === "sent" ? "email-log-badge-sent badge-paid" : "email-log-badge-failed badge-overdue"}">
+              ${log.status === "sent" ? "Sent" : "Failed"}
+            </span>
+          </div>
+        </div>`).join("")}
+    </div>`;
+  } catch (err) {
+    document.getElementById("emailLogContent").innerHTML =
+      `<p style="color:var(--red-600);font-size:13px;padding:16px">
+        Could not load logs: ${err.message}<br>
+        <small style="color:var(--text-3)">Make sure you have added the emailLogs collection rule in Firestore.</small>
+      </p>`;
+  }
+}
+
+// ── Email preview modal ───────────────────────────────────
+// pendingEmail holds the data for a manual resend until the admin confirms
+let pendingEmail = null;
+
+async function previewAndSendEmail(type, docId) {
+  let doc_data, client, subject, htmlBody, pdfObj, ccEmail;
+
+  if (type === "invoice") {
+    const inv = cache.invoices.find(i => i.id === docId); if (!inv) return;
+    client    = cache.clients.find(c => c.id === inv.clientId) || {};
+    subject   = resolveSubject(agencySettings.subjectInvoice || "Invoice {invoiceNumber} from {agencyName}", inv);
+    htmlBody  = emailInvoiceHTML(inv, client);
+    pdfObj    = await printInvoicePDF(docId, true);
+    ccEmail   = inv.ccEmail || "";
+    doc_data  = inv;
+  } else if (type === "receipt") {
+    const rec = cache.receipts.find(r => r.id === docId); if (!rec) return;
+    client    = cache.clients.find(c => c.id === rec.clientId) || {};
+    subject   = resolveSubject(agencySettings.subjectReceipt || "Payment Confirmed — {receiptNumber}", rec);
+    htmlBody  = emailReceiptHTML(rec, client);
+    pdfObj    = await printReceiptPDF(docId, true);
+    doc_data  = rec;
+  } else if (type === "quote") {
+    const qt  = cache.quotes.find(q => q.id === docId); if (!qt) return;
+    client    = cache.clients.find(c => c.id === qt.clientId) || {};
+    subject   = resolveSubject(agencySettings.subjectQuote || "Quotation {quoteNumber} from {agencyName}", qt);
+    htmlBody  = emailQuoteHTML(qt, client);
+    pdfObj    = await printQuotePDF(docId, true);
+    doc_data  = qt;
+  } else return;
+
+  if (!client.email) {
+    toast(`No email address on file for ${client.companyName || "this client"}`, "warning"); return;
+  }
+
+  // Populate preview modal
+  document.getElementById("previewEmailTo").textContent      = `${client.companyName} <${client.email}>`;
+  document.getElementById("previewEmailSubject").textContent = subject;
+
+  const ccRow = document.getElementById("previewCCRow");
+  if (ccEmail) { ccRow.style.display = "flex"; document.getElementById("previewEmailCC").textContent = ccEmail; }
+  else           ccRow.style.display = "none";
+
+  const attRow = document.getElementById("previewAttachRow");
+  if (pdfObj) { attRow.style.display = "flex"; document.getElementById("previewAttachName").textContent = pdfObj.filename; }
+  else          attRow.style.display = "none";
+
+  // Render HTML into iframe
+  const frame = document.getElementById("emailPreviewFrame");
+  frame.srcdoc = htmlBody;
+
+  // Store pending send
+  pendingEmail = {
+    toEmail: client.email, toName: client.companyName,
+    subject, htmlBody, pdfObj, ccEmail,
+    logEntry: { type, clientId: client.id || doc_data.clientId,
+      docNumber: doc_data.invoiceNumber || doc_data.receiptNumber || doc_data.quoteNumber || "" }
+  };
+
+  openModal("emailPreviewModal");
+}
+
+// ── Brevo contact sync (enables Brevo Automation workflows) ──
+async function syncBrevoContact(client, attributes = {}) {
+  const apiKey = agencySettings.brevoApiKey?.trim();
+  if (!apiKey || !client?.email) return;
+  const [first, ...rest] = (client.contactPerson || client.companyName || "").split(" ");
+  try {
+    await fetch("https://api.brevo.com/v3/contacts", {
+      method: "POST",
+      headers: { "api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: client.email,
+        attributes: {
+          FIRSTNAME: first || "", LASTNAME: rest.join(" ") || "",
+          COMPANY: client.companyName || "", ...attributes,
+        },
+        updateEnabled: true,
+        listIds: [],
+      }),
+    });
+    console.log(`[Brevo] Contact synced: ${client.email}`);
+  } catch (err) {
+    console.warn("[Brevo] Contact sync failed:", err.message);
+  }
 }
