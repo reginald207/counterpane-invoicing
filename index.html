@@ -33,14 +33,14 @@
       <div class="field-group">
         <label for="loginEmail">Email Address</label>
         <div class="input-wrap">
-          <i class="fa-solid fa-envelope"></i>
+          <!-- <i class="fa-solid fa-envelope"></i> -->
           <input type="email" id="loginEmail" placeholder="you@company.com" required autocomplete="email" />
         </div>
       </div>
       <div class="field-group">
         <label for="loginPassword">Password</label>
         <div class="input-wrap">
-          <i class="fa-solid fa-lock"></i>
+          <!-- <i class="fa-solid fa-lock"></i> -->
           <input type="password" id="loginPassword" placeholder="Enter your password" required autocomplete="current-password" />
           <button type="button" class="toggle-pw" id="togglePw" tabindex="-1"><i class="fa-solid fa-eye"></i></button>
         </div>
@@ -376,13 +376,22 @@
         <div class="card-head"><h3><i class="fa-solid fa-key"></i> Change Password</h3></div>
         <form id="changePasswordForm" class="settings-form">
           <div class="field-group"><label>Current Password</label>
-            <div class="input-wrap"><i class="fa-solid fa-lock"></i><input type="password" id="currentPassword" placeholder="Your current password" /></div>
+            <div class="input-wrap">
+              <!-- <i class="fa-solid fa-lock"> -->
+                
+              </i><input type="password" id="currentPassword" placeholder="Your current password" /></div>
           </div>
           <div class="field-group"><label>New Password</label>
-            <div class="input-wrap"><i class="fa-solid fa-lock"></i><input type="password" id="newPassword" placeholder="At least 6 characters" /></div>
+            <div class="input-wrap">
+              <!-- <i class="fa-solid fa-lock"> -->
+                
+              </i><input type="password" id="newPassword" placeholder="At least 6 characters" /></div>
           </div>
           <div class="field-group"><label>Confirm New Password</label>
-            <div class="input-wrap"><i class="fa-solid fa-lock"></i><input type="password" id="confirmPassword" placeholder="Repeat new password" /></div>
+            <div class="input-wrap">
+              <!-- <i class="fa-solid fa-lock"> -->
+                
+              </i><input type="password" id="confirmPassword" placeholder="Repeat new password" /></div>
           </div>
           <div id="passwordChangeError" class="form-error hide"></div>
           <div id="passwordChangeSuccess" class="form-success hide"></div>
