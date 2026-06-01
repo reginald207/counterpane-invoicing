@@ -33,14 +33,14 @@
       <div class="field-group">
         <label for="loginEmail">Email Address</label>
         <div class="input-wrap">
-          <!-- <i class="fa-solid fa-envelope"></i> -->
+          <i class="fa-solid fa-envelope"></i>
           <input type="email" id="loginEmail" placeholder="you@company.com" required autocomplete="email" />
         </div>
       </div>
       <div class="field-group">
         <label for="loginPassword">Password</label>
         <div class="input-wrap">
-          <!-- <i class="fa-solid fa-lock"></i> -->
+          <i class="fa-solid fa-lock"></i>
           <input type="password" id="loginPassword" placeholder="Enter your password" required autocomplete="current-password" />
           <button type="button" class="toggle-pw" id="togglePw" tabindex="-1"><i class="fa-solid fa-eye"></i></button>
         </div>
@@ -254,7 +254,51 @@
             <span class="field-hint">Direct image URL used on PDF documents. Use a publicly accessible link.</span>
           </div>
           <div class="field-group"><label>Invoice Footer Note</label><textarea id="settingFooter" rows="2" placeholder="Thank you for your business."></textarea></div>
-          <button type="submit" class="btn-primary">Save Settings</button>
+
+          <div class="modal-section-label" style="margin-top:8px">Email Automation — Brevo</div>
+          <div class="field-group">
+            <label>Brevo API Key</label>
+            <div class="input-wrap">
+              <input type="password" id="settingBrevoKey" placeholder="xkeysib-••••••••••••••••••••••••" style="padding-left:12px" />
+              <button type="button" class="toggle-pw" id="toggleBrevoKey" tabindex="-1"><i class="fa-solid fa-eye"></i></button>
+            </div>
+            <span class="field-hint">Get your key at <strong>app.brevo.com → Settings → API Keys</strong>. Free plan: 300 emails/day.</span>
+          </div>
+          <div class="form-row">
+            <div class="field-group"><label>Sender Name</label><input type="text" id="settingBrevoFromName" placeholder="Your Agency Name" /></div>
+            <div class="field-group"><label>Sender Email <span class="field-hint-inline">(must be verified in Brevo)</span></label><input type="email" id="settingBrevoFromEmail" placeholder="billing@youragency.com" /></div>
+          </div>
+          <div class="field-group">
+            <label>Auto-send Emails When</label>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
+              <label class="checkbox-label"><input type="checkbox" id="emailToggleInvoice" /> A new invoice is created</label>
+              <label class="checkbox-label"><input type="checkbox" id="emailToggleReceipt" /> A receipt / payment is recorded</label>
+              <label class="checkbox-label"><input type="checkbox" id="emailToggleQuote" /> A new quote is created</label>
+              <label class="checkbox-label"><input type="checkbox" id="emailToggleWelcome" /> A new client portal account is created</label>
+              <label class="checkbox-label"><input type="checkbox" id="emailToggleOverdue" /> An invoice becomes overdue</label>
+            </div>
+          </div>
+          <div class="field-group">
+            <label>Custom Subject Lines <span class="field-hint-inline">use {invoiceNumber}, {receiptNumber}, {quoteNumber}, {agencyName}</span></label>
+            <div style="display:flex;flex-direction:column;gap:7px;margin-top:4px">
+              <div class="form-row">
+                <div class="field-group"><label style="font-size:11px;color:var(--text-3)">Invoice</label><input type="text" id="subjectInvoice" placeholder="Invoice {invoiceNumber} from {agencyName}" /></div>
+                <div class="field-group"><label style="font-size:11px;color:var(--text-3)">Receipt</label><input type="text" id="subjectReceipt" placeholder="Payment Confirmed — {receiptNumber}" /></div>
+              </div>
+              <div class="form-row">
+                <div class="field-group"><label style="font-size:11px;color:var(--text-3)">Quote</label><input type="text" id="subjectQuote" placeholder="Quotation {quoteNumber} from {agencyName}" /></div>
+                <div class="field-group"><label style="font-size:11px;color:var(--text-3)">Welcome</label><input type="text" id="subjectWelcome" placeholder="Welcome to {agencyName} Client Portal" /></div>
+              </div>
+              <div class="form-row">
+                <div class="field-group"><label style="font-size:11px;color:var(--text-3)">Overdue Reminder</label><input type="text" id="subjectOverdue" placeholder="Overdue Invoice {invoiceNumber} — Action Required" /></div>
+                <div class="field-group"></div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button type="submit" class="btn-primary">Save Settings</button>
+            <button type="button" class="btn-ghost" id="testEmailBtn"><i class="fa-solid fa-paper-plane"></i> Send Test Email</button>
+          </div>
         </form>
       </div>
     </section>
@@ -329,26 +373,16 @@
     <!-- CHANGE PASSWORD -->
     <section id="clientPasswordPage" class="page">
       <div class="card settings-card">
-        <div class="card-head"><h3>
-          <i class="fa-solid fa-key"></i> Change Password</h3></div>
+        <div class="card-head"><h3><i class="fa-solid fa-key"></i> Change Password</h3></div>
         <form id="changePasswordForm" class="settings-form">
           <div class="field-group"><label>Current Password</label>
-            <div class="input-wrap">
-              <!-- <i class="fa-solid fa-lock"> -->
-
-              </i><input type="password" id="currentPassword" placeholder="Your current password" /></div>
+            <div class="input-wrap"><i class="fa-solid fa-lock"></i><input type="password" id="currentPassword" placeholder="Your current password" /></div>
           </div>
           <div class="field-group"><label>New Password</label>
-            <div class="input-wrap">
-              <!-- <i class="fa-solid fa-lock"> -->
-
-              </i><input type="password" id="newPassword" placeholder="At least 6 characters" /></div>
+            <div class="input-wrap"><i class="fa-solid fa-lock"></i><input type="password" id="newPassword" placeholder="At least 6 characters" /></div>
           </div>
           <div class="field-group"><label>Confirm New Password</label>
-            <div class="input-wrap">
-              <!-- <i class="fa-solid fa-lock"> -->
-
-              </i><input type="password" id="confirmPassword" placeholder="Repeat new password" /></div>
+            <div class="input-wrap"><i class="fa-solid fa-lock"></i><input type="password" id="confirmPassword" placeholder="Repeat new password" /></div>
           </div>
           <div id="passwordChangeError" class="form-error hide"></div>
           <div id="passwordChangeSuccess" class="form-success hide"></div>
@@ -542,7 +576,11 @@
           </select>
         </div>
       </div>
-      <div class="field-group"><label>Notes</label><textarea id="invoiceNotes" rows="2" placeholder="Optional notes…"></textarea></div>
+      <div class="form-row">
+        <div class="field-group"><label>CC Email <span class="field-hint-inline">(optional — e.g. accounts dept)</span></label>
+          <input type="email" id="invoiceCC" placeholder="cc@client.com" /></div>
+        <div class="field-group"><label>Notes</label><textarea id="invoiceNotes" rows="2" placeholder="Optional notes…"></textarea></div>
+      </div>
       <div class="modal-actions">
         <button type="button" class="btn-ghost" data-close="invoiceModal">Cancel</button>
         <button type="submit" class="btn-primary">Save Invoice</button>
@@ -714,6 +752,41 @@
         <button type="submit" class="btn-primary"><i class="fa-solid fa-file-pdf"></i> Generate PDF</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- EMAIL PREVIEW MODAL -->
+<div id="emailPreviewModal" class="modal-overlay hide">
+  <div class="modal modal-lg">
+    <div class="modal-head">
+      <h3><i class="fa-solid fa-envelope" style="color:var(--green-600);margin-right:6px"></i>Email Preview</h3>
+      <button class="modal-close" data-close="emailPreviewModal"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="email-preview-meta">
+      <div class="email-preview-row"><span class="epm-label">To</span><span id="previewEmailTo" class="epm-value"></span></div>
+      <div class="email-preview-row" id="previewCCRow" style="display:none"><span class="epm-label">CC</span><span id="previewEmailCC" class="epm-value"></span></div>
+      <div class="email-preview-row"><span class="epm-label">Subject</span><span id="previewEmailSubject" class="epm-value"></span></div>
+      <div class="email-preview-row" id="previewAttachRow" style="display:none">
+        <span class="epm-label">Attachment</span>
+        <span class="epm-value"><i class="fa-solid fa-file-pdf" style="color:var(--red-600);margin-right:4px"></i><span id="previewAttachName"></span></span>
+      </div>
+    </div>
+    <iframe id="emailPreviewFrame" class="email-preview-frame"></iframe>
+    <div class="modal-actions" style="border-top:1px solid var(--border);padding-top:14px">
+      <button class="btn-ghost" data-close="emailPreviewModal">Cancel</button>
+      <button class="btn-primary" id="confirmSendBtn"><i class="fa-solid fa-paper-plane"></i> Send Email</button>
+    </div>
+  </div>
+</div>
+
+<!-- EMAIL LOG MODAL -->
+<div id="emailLogModal" class="modal-overlay hide">
+  <div class="modal modal-lg">
+    <div class="modal-head">
+      <h3 id="emailLogTitle"><i class="fa-solid fa-clock-rotate-left" style="color:var(--green-600);margin-right:6px"></i>Email History</h3>
+      <button class="modal-close" data-close="emailLogModal"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div id="emailLogContent" style="padding:20px;min-height:120px"></div>
   </div>
 </div>
 
