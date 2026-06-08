@@ -476,10 +476,16 @@ function calcInvoiceTotals() {
   const taxPct  = parseFloat(document.getElementById("invoiceTaxRate").value)  || 0;
   const disc    = sub * (discPct / 100);
   const tax     = (sub - disc) * (taxPct / 100);
-  document.getElementById("invSubtotal").textContent    = fmt(sub);
-  document.getElementById("invDiscountAmt").textContent = `-${fmt(disc)}`;
-  document.getElementById("invTaxAmt").textContent      = fmt(tax);
-  document.getElementById("invGrandTotal").textContent  = fmt(sub - disc + tax);
+  const grand   = sub - disc + tax;
+  // Use selected currency if set, otherwise settings default
+  const cur     = document.getElementById("invoiceCurrency")?.value || agencySettings.currency || "GHS";
+  const fmtC    = (n) => `${cur} ${Number(n||0).toLocaleString("en-GH",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const xRate   = parseFloat(document.getElementById("invoiceExchangeRate")?.value) || 0;
+  document.getElementById("invSubtotal").textContent    = fmtC(sub);
+  document.getElementById("invDiscountAmt").textContent = `-${fmtC(disc)}`;
+  document.getElementById("invTaxAmt").textContent      = fmtC(tax);
+  document.getElementById("invGrandTotal").textContent  = fmtC(grand) +
+    (xRate > 0 ? ` <small style="color:var(--text-3);font-size:11px">(GHS ${(grand*xRate).toLocaleString("en-GH",{minimumFractionDigits:2})})</small>` : "");
 }
 
 function calcQuoteTotals() {
@@ -613,8 +619,11 @@ function bindStaticListeners() {
     document.getElementById("invoiceForm").reset();
     document.getElementById("invoiceDate").value = today();
     populateSelect("invoiceClientTarget", cache.clients, "companyName");
-    // Reset project dropdown
     document.getElementById("invoiceProjectTarget").innerHTML = '<option value="">— None / Select Project —</option>';
+    // Reset currency fields
+    if (document.getElementById("invoiceCurrency")) document.getElementById("invoiceCurrency").value = "";
+    if (document.getElementById("invoiceExchangeRate")) document.getElementById("invoiceExchangeRate").value = "";
+    if (document.getElementById("exchangeRateWrap")) document.getElementById("exchangeRateWrap").style.display = "none";
     initLineItems("invoiceLineItems", calcInvoiceTotals);
     calcInvoiceTotals();
     openModal("invoiceModal");
@@ -631,6 +640,13 @@ function bindStaticListeners() {
   document.getElementById("addInvoiceLineBtn").addEventListener("click", () => addLineItemRow("invoiceLineItems", calcInvoiceTotals));
   document.getElementById("invoiceTaxRate").addEventListener("input", calcInvoiceTotals);
   document.getElementById("invoiceDiscount").addEventListener("input", calcInvoiceTotals);
+  document.getElementById("invoiceCurrency").addEventListener("change", () => {
+    const sel = document.getElementById("invoiceCurrency").value;
+    document.getElementById("exchangeRateWrap").style.display = sel ? "flex" : "none";
+    if (!sel) document.getElementById("invoiceExchangeRate").value = "";
+    calcInvoiceTotals();
+  });
+  document.getElementById("invoiceExchangeRate").addEventListener("input", calcInvoiceTotals);
   document.getElementById("invoiceForm").addEventListener("submit", saveInvoice);
   document.getElementById("invoiceSearch").addEventListener("input", renderInvoicesTable);
   document.getElementById("invoiceStatusFilter").addEventListener("change", renderInvoicesTable);
@@ -838,9 +854,13 @@ async function saveClient(e) {
       renderClientsTable();
       toast("Client and portal account created");
       if (agencySettings.emailWelcome) {
-        sendBrevoEmail(loginEmail, clientData.companyName,
-          `Welcome to the ${agencySettings.agencyName || "Counterpane"} Client Portal`,
-          emailWelcomeHTML(clientData, loginEmail));
+        const wSubj = resolveSubject(
+          agencySettings.subjectWelcome || "Welcome to {agencyName} Client Portal",
+          { agencyName: agencySettings.agencyName || "Counterpane" }
+        );
+        sendBrevoEmail(loginEmail, clientData.companyName, wSubj,
+          emailWelcomeHTML(clientData, loginEmail, loginPw),
+          { logEntry: { type: "welcome", clientId: clientRef.id, docNumber: "" } });
       }
     }
   } catch (err) {
@@ -1333,10 +1353,18 @@ async function saveInvoice(e) {
     items, subtotal: sub, discountAmount: disc, taxAmount: tax,
     grossTotal: sub - disc + tax,
     notes:  document.getElementById("invoiceNotes").value.trim(),
-    status: existing?.status || "UNPAID",
-    projectId:   document.getElementById("invoiceProjectTarget")?.value || "",
-    paymentType: document.getElementById("invoicePaymentType")?.value   || "Full Payment",
-    ccEmail:     document.getElementById("invoiceCC")?.value.trim()     || "",
+    status:       existing?.status || "UNPAID",
+    projectId:    document.getElementById("invoiceProjectTarget")?.value  || "",
+    paymentType:  document.getElementById("invoicePaymentType")?.value    || "Full Payment",
+    ccEmail:      document.getElementById("invoiceCC")?.value.trim()      || "",
+    currency:     document.getElementById("invoiceCurrency")?.value       || agencySettings.currency || "GHS",
+    exchangeRate: parseFloat(document.getElementById("invoiceExchangeRate")?.value) || 0,
+    ghsTotal:     (() => {
+      const cur2  = document.getElementById("invoiceCurrency")?.value;
+      const xRate = parseFloat(document.getElementById("invoiceExchangeRate")?.value) || 0;
+      const grand2 = sub - disc + tax;
+      return (cur2 && xRate > 0) ? grand2 * xRate : 0;
+    })(),
   };
   // Attach project details for PDF reference
   const proj = cache.projects.find(p => p.id === data.projectId);
@@ -1392,8 +1420,15 @@ function editInvoice(id) {
   document.getElementById("invoiceDueDate").value  = inv.dueDate    || "";
   document.getElementById("invoiceTaxRate").value  = inv.taxRate    || 0;
   document.getElementById("invoiceDiscount").value = inv.discount   || 0;
-  document.getElementById("invoiceNotes").value    = inv.notes      || "";
+  document.getElementById("invoiceNotes").value = inv.notes    || "";
   if (document.getElementById("invoiceCC")) document.getElementById("invoiceCC").value = inv.ccEmail || "";
+  // Restore currency
+  const curEl  = document.getElementById("invoiceCurrency");
+  const xrEl   = document.getElementById("invoiceExchangeRate");
+  const xrWrap = document.getElementById("exchangeRateWrap");
+  if (curEl) curEl.value = (inv.currency && inv.currency !== (agencySettings.currency||"GHS")) ? inv.currency : "";
+  if (xrEl)  xrEl.value  = inv.exchangeRate || "";
+  if (xrWrap) xrWrap.style.display = (inv.currency && inv.currency !== (agencySettings.currency||"GHS")) ? "flex" : "none";
   // Restore payment type
   const ptEl = document.getElementById("invoicePaymentType");
   if (ptEl) ptEl.value = inv.paymentType || "Full Payment";
@@ -1612,7 +1647,8 @@ function renderSettings() {
   document.getElementById("settingEmail").value         = agencySettings.email         || "";
   document.getElementById("settingPhone").value         = agencySettings.phone         || "";
   document.getElementById("settingAddress").value       = agencySettings.address       || "";
-  document.getElementById("settingLogoUrl").value       = agencySettings.logoUrl       || "";
+  document.getElementById("settingLogoUrl").value    = agencySettings.logoUrl    || "";
+  document.getElementById("settingPortalUrl").value  = agencySettings.portalUrl  || "";
   document.getElementById("settingFooter").value        = agencySettings.footer        || "";
   document.getElementById("settingBrevoKey").value      = agencySettings.brevoApiKey   || "";
   document.getElementById("settingBrevoFromName").value = agencySettings.brevoFromName || "";
@@ -1638,6 +1674,7 @@ async function saveSettings(e) {
     phone:          document.getElementById("settingPhone").value.trim(),
     address:        document.getElementById("settingAddress").value.trim(),
     logoUrl:        document.getElementById("settingLogoUrl").value.trim(),
+    portalUrl: document.getElementById("settingPortalUrl").value.trim(),
     footer:         document.getElementById("settingFooter").value.trim(),
     brevoApiKey:    document.getElementById("settingBrevoKey").value.trim(),
     brevoFromName:  document.getElementById("settingBrevoFromName").value.trim(),
@@ -1961,6 +1998,7 @@ async function pdfHeader(d, docType, docNumber) {
   // Document number below badge
   d.setTextColor(200, 230, 210); d.setFontSize(8); d.setFont("helvetica", "normal");
   d.text(docNumber, W - m, 30, { align: "right" });
+  d.text(new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}), W - m, 37, { align: "right" });
 
   d.setTextColor(0, 0, 0);
   return 52;
@@ -2040,7 +2078,7 @@ function pdfServiceBlock(d, y, inv) {
   return y + 6;
 }
 
-function pdfItems(d, y, items) {
+function pdfItems(d, y, items, currency) {
   const W = 210, m = 16;
 
   // Table header
@@ -2053,6 +2091,11 @@ function pdfItems(d, y, items) {
   y += 11;
 
   d.setFont("helvetica", "normal"); d.setFontSize(9); d.setTextColor(15, 23, 42);
+  // Use invoice currency for amounts if provided
+  const pdfFmtC = currency && currency !== (agencySettings.currency || "GHS")
+    ? (n) => `${currency} ${Number(n||0).toLocaleString("en-GH",{minimumFractionDigits:2})}`
+    : pdfFmt;
+
   items.forEach((item, i) => {
     const rowH = 8;
     if (i % 2 === 0) { d.setFillColor(250, 252, 250); d.rect(m, y, W - m*2, rowH, "F"); }
@@ -2060,9 +2103,9 @@ function pdfItems(d, y, items) {
     d.text(String(item.description || "").substring(0, 68), m + 4, y + 5.5);
     d.setTextColor(...PDF_GRAY);
     d.text(String(item.quantity), 128, y + 5.5, { align: "right" });
-    d.text(pdfFmt(item.unitRate), 158, y + 5.5, { align: "right" });
+    d.text(pdfFmtC(item.unitRate), 158, y + 5.5, { align: "right" });
     d.setTextColor(15, 23, 42); d.setFont("helvetica", "bold");
-    d.text(pdfFmt(item.total), W - m, y + 5.5, { align: "right" });
+    d.text(pdfFmtC(item.total), W - m, y + 5.5, { align: "right" });
     d.setFont("helvetica", "normal"); d.setTextColor(15, 23, 42);
     y += rowH;
   });
@@ -2074,12 +2117,17 @@ function pdfItems(d, y, items) {
 
 function pdfTotals(d, y, inv) {
   const W = 210, m = 16, labelX = 142, valX = W - m;
+  const cur      = inv.currency || agencySettings.currency || "GHS";
+  const baseCur  = agencySettings.currency || "GHS";
+  const isForeign = inv.currency && inv.currency !== baseCur && inv.exchangeRate > 0;
+  const pdfFmtC   = (n) => `${cur} ${Number(n||0).toLocaleString("en-GH",{minimumFractionDigits:2})}`;
+
   d.setFontSize(9); d.setFont("helvetica", "normal");
 
   const rows = [
-    ["Subtotal",  pdfFmt(inv.subtotal)],
-    ...(inv.discountAmount > 0 ? [["Discount",  "-" + pdfFmt(inv.discountAmount)]] : []),
-    ...(inv.taxAmount > 0      ? [["Tax / VAT",  pdfFmt(inv.taxAmount)]] : []),
+    ["Subtotal",   pdfFmtC(inv.subtotal)],
+    ...(inv.discountAmount > 0 ? [["Discount",  "-" + pdfFmtC(inv.discountAmount)]] : []),
+    ...(inv.taxAmount > 0      ? [["Tax / VAT",  pdfFmtC(inv.taxAmount)]]            : []),
   ];
   rows.forEach(([label, val]) => {
     d.setTextColor(...PDF_GRAY); d.text(label, labelX, y);
@@ -2088,12 +2136,27 @@ function pdfTotals(d, y, inv) {
   });
 
   // Grand total bar
-  d.setFillColor(...PDF_GREEN); d.rect(labelX - 5, y - 2, W - labelX - m + 5 + 2, 11, "F");
+  d.setFillColor(...PDF_GREEN); d.rect(labelX - 5, y - 2, W - labelX - m + 7, 11, "F");
   d.setTextColor(255, 255, 255); d.setFont("helvetica", "bold"); d.setFontSize(10);
   d.text("TOTAL DUE", labelX, y + 5.5);
-  d.text(pdfFmt(inv.grossTotal), valX, y + 5.5, { align: "right" });
+  d.text(pdfFmtC(inv.grossTotal), valX, y + 5.5, { align: "right" });
+  y += 14;
 
-  return y + 18;
+  // GHS equivalent row (foreign currency invoices only)
+  if (isForeign) {
+    const ghsAmt = inv.ghsTotal || (inv.grossTotal * inv.exchangeRate);
+    d.setFillColor(255, 251, 235); d.rect(labelX - 5, y - 2, W - labelX - m + 7, 10, "F");
+    d.setDrawColor(217, 119, 6); d.setLineWidth(0.3);
+    d.rect(labelX - 5, y - 2, W - labelX - m + 7, 10, "S");
+    d.setLineWidth(0.2); d.setDrawColor(...PDF_LGRAY);
+    d.setFontSize(8); d.setFont("helvetica", "normal"); d.setTextColor(146, 64, 14);
+    d.text(`GHS Equivalent  (1 ${cur} = GHS ${inv.exchangeRate})`, labelX, y + 4.5);
+    d.setFont("helvetica", "bold");
+    d.text(`GHS ${ghsAmt.toLocaleString("en-GH",{minimumFractionDigits:2})}`, valX, y + 4.5, { align: "right" });
+    y += 12;
+  }
+
+  return y + 4;
 }
 
 function pdfFooter(d, y) {
@@ -2120,7 +2183,7 @@ async function printInvoicePDF(id, returnBase64 = false) {
   let y = await pdfHeader(d, "INVOICE", inv.invoiceNumber);
   y = pdfClientBlock(d, y, inv);
   y = pdfServiceBlock(d, y, inv);
-  y = pdfItems(d, y, inv.items || []);
+  y = pdfItems(d, y, inv.items || [], inv.currency);
   y = pdfTotals(d, y, inv);
   if (inv.notes) {
     d.setFontSize(8.5); d.setFont("helvetica", "italic"); d.setTextColor(...PDF_GRAY);
@@ -2641,11 +2704,38 @@ function emailTable(rows) {
 
 // ── Invoice email ─────────────────────────────────────────
 function emailInvoiceHTML(inv, client) {
-  const agency = agencySettings.agencyName || "Counterpane";
-  const items  = (inv.items || []).map(i =>
-    `<tr><td style="padding:7px 12px;font-size:13px;color:#374151;border-bottom:1px solid #f1f5f9">${i.description}</td>
-     <td style="padding:7px 12px;font-size:13px;color:#374151;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap">${fmt(i.total)}</td></tr>`
+  const agency    = agencySettings.agencyName || "Counterpane";
+  const cur       = inv.currency || agencySettings.currency || "GHS";
+  const fmtI      = (n) => `${cur} ${Number(n||0).toLocaleString("en-GH",{minimumFractionDigits:2})}`;
+  const isForeign = inv.currency && inv.currency !== (agencySettings.currency || "GHS") && inv.exchangeRate > 0;
+
+  const items = (inv.items || []).map(i =>
+    `<tr>
+      <td style="padding:7px 12px;font-size:13px;color:#374151;border-bottom:1px solid #f1f5f9">${i.description}</td>
+      <td style="padding:7px 12px;font-size:13px;color:#374151;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap">${fmtI(i.total)}</td>
+    </tr>`
   ).join("");
+
+  // Deliverables from linked project
+  const deliverables = inv.deliverables || [];
+  const deliverablesBlock = deliverables.length ? `
+    <p style="margin:20px 0 8px;font-size:13px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.5px">
+      Scope of Work / Deliverables</p>
+    <table width="100%" cellpadding="0" cellspacing="0"
+      style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+      ${deliverables.map((d, i) => `
+        <tr style="background:${i%2===0?"#fafafa":"white"}">
+          <td style="padding:9px 14px;font-size:13px;color:#374151;border-bottom:1px solid #f1f5f9">
+            <span style="color:#16a34a;margin-right:8px">✓</span>${d}
+          </td>
+        </tr>`).join("")}
+      ${inv.serviceCategoryName || inv.serviceTypeName ? `
+        <tr style="background:#f0fdf4">
+          <td style="padding:8px 14px;font-size:12px;color:#64748b">
+            Service: <strong>${[inv.serviceCategoryName, inv.serviceTypeName].filter(Boolean).join(" › ")}</strong>
+          </td>
+        </tr>` : ""}
+    </table>` : "";
 
   return emailBaseHTML(`
     <p style="margin:0 0 6px;font-size:13px;color:#64748b;text-transform:uppercase;letter-spacing:.5px">Invoice</p>
@@ -2653,7 +2743,7 @@ function emailInvoiceHTML(inv, client) {
     <p style="margin:0 0 24px;color:#64748b">From <strong>${agency}</strong></p>
 
     <p style="margin:0 0 16px;color:#475569">Dear <strong>${client.companyName}</strong>,</p>
-    <p style="margin:0 0 24px;color:#475569">Please find your invoice details below. 
+    <p style="margin:0 0 24px;color:#475569">Please find your invoice details below.
     Payment is due by <strong>${inv.dueDate || "the date indicated"}</strong>.</p>
 
     ${emailTable([
@@ -2661,24 +2751,34 @@ function emailInvoiceHTML(inv, client) {
       emailDataRow("Date Issued",    inv.dateIssued || "—"),
       emailDataRow("Due Date",       `<strong>${inv.dueDate || "—"}</strong>`),
       emailDataRow("Payment Type",   inv.paymentType || "Full Payment"),
+      ...(isForeign ? [emailDataRow("Currency", `${cur} (Rate: 1 ${cur} = GHS ${inv.exchangeRate}`+`)`)] : []),
     ])}
 
+    ${deliverablesBlock}
+
     ${items ? `
-    <p style="margin:20px 0 8px;font-size:13px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.5px">Line Items</p>
+    <p style="margin:20px 0 8px;font-size:13px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.5px">
+      Billing Breakdown</p>
     <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
       ${items}
-      ${inv.taxAmount > 0 ? `<tr><td style="padding:7px 12px;font-size:13px;color:#64748b;border-bottom:1px solid #f1f5f9">Tax / VAT</td>
-        <td style="padding:7px 12px;font-size:13px;text-align:right;border-bottom:1px solid #f1f5f9">${fmt(inv.taxAmount)}</td></tr>` : ""}
+      ${inv.taxAmount > 0 ? `<tr><td style="padding:7px 12px;font-size:13px;color:#64748b;border-bottom:1px solid #f1f5f9">
+        Tax / VAT</td><td style="padding:7px 12px;font-size:13px;text-align:right;border-bottom:1px solid #f1f5f9">
+        ${fmtI(inv.taxAmount)}</td></tr>` : ""}
       <tr style="background:#f0fdf4">
         <td style="padding:10px 12px;font-size:14px;font-weight:700;color:#0f172a">Total Due</td>
-        <td style="padding:10px 12px;font-size:16px;font-weight:700;color:#16a34a;text-align:right">${fmt(inv.grossTotal)}</td>
+        <td style="padding:10px 12px;font-size:16px;font-weight:700;color:#16a34a;text-align:right">${fmtI(inv.grossTotal)}</td>
       </tr>
+      ${isForeign ? `<tr style="background:#fffbeb">
+        <td style="padding:8px 12px;font-size:12px;color:#92400e">GHS Equivalent</td>
+        <td style="padding:8px 12px;font-size:13px;font-weight:700;color:#92400e;text-align:right">
+          GHS ${((inv.ghsTotal||inv.grossTotal*inv.exchangeRate)||0).toLocaleString("en-GH",{minimumFractionDigits:2})}</td>
+      </tr>` : ""}
     </table>` : ""}
 
     ${inv.notes ? `${emailDivider()}<p style="margin:0;font-size:13px;color:#64748b;font-style:italic">${inv.notes}</p>` : ""}
     ${emailDivider()}
     <p style="margin:0;font-size:13px;color:#94a3b8">
-      If you have any questions, please contact us at ${agencySettings.email || agency}.
+      Questions? Contact us at ${agencySettings.email || agency}.
     </p>
   `);
 }
@@ -2686,14 +2786,42 @@ function emailInvoiceHTML(inv, client) {
 // ── Receipt email ─────────────────────────────────────────
 function emailReceiptHTML(rec, client) {
   const agency = agencySettings.agencyName || "Counterpane";
+
+  // Deliverables — one per line
+  const deliverables = rec.deliverables || [];
+  const deliverablesBlock = deliverables.length ? `
+    <p style="margin:20px 0 8px;font-size:13px;font-weight:600;color:#64748b;
+      text-transform:uppercase;letter-spacing:.5px">Services / Deliverables Covered</p>
+    <table width="100%" cellpadding="0" cellspacing="0"
+      style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:20px">
+      ${deliverables.map((d, i) => `
+        <tr style="background:${i%2===0?"#fafafa":"white"}">
+          <td style="padding:10px 14px;font-size:13.5px;color:#374151;
+            border-bottom:1px solid #f1f5f9;line-height:1.4">
+            <span style="color:#16a34a;margin-right:10px;font-weight:700">✓</span>${d}
+          </td>
+        </tr>`).join("")}
+      ${rec.serviceCategoryName || rec.serviceTypeName ? `
+        <tr style="background:#f0fdf4">
+          <td style="padding:8px 14px;font-size:12px;color:#64748b">
+            Service: <strong>${[rec.serviceCategoryName, rec.serviceTypeName].filter(Boolean).join(" › ")}</strong>
+          </td>
+        </tr>` : ""}
+    </table>` : "";
+
   return emailBaseHTML(`
-    <p style="margin:0 0 6px;font-size:13px;color:#64748b;text-transform:uppercase;letter-spacing:.5px">Payment Confirmation</p>
-    <h2 style="margin:0 0 4px;font-size:22px;font-weight:700;color:#0f172a;letter-spacing:-.3px">${rec.receiptNumber}</h2>
+    <p style="margin:0 0 6px;font-size:13px;color:#64748b;text-transform:uppercase;letter-spacing:.5px">
+      Payment Confirmation</p>
+    <h2 style="margin:0 0 4px;font-size:22px;font-weight:700;color:#0f172a;letter-spacing:-.3px">
+      ${rec.receiptNumber}</h2>
     <p style="margin:0 0 24px;color:#64748b">From <strong>${agency}</strong></p>
 
-    <div style="background:#f0fdf4;border:1px solid #dcfce7;border-radius:10px;padding:20px;text-align:center;margin-bottom:24px">
-      <p style="margin:0 0 4px;font-size:13px;color:#16a34a;font-weight:600">AMOUNT RECEIVED</p>
-      <p style="margin:0;font-size:32px;font-weight:700;color:#0f172a;letter-spacing:-1px">${fmt(rec.amountPaid)}</p>
+    <div style="background:#f0fdf4;border:2px solid #16a34a;border-radius:10px;
+      padding:20px;text-align:center;margin-bottom:24px">
+      <p style="margin:0 0 4px;font-size:12px;color:#16a34a;font-weight:700;
+        text-transform:uppercase;letter-spacing:.5px">Amount Received</p>
+      <p style="margin:0;font-size:34px;font-weight:700;color:#0f172a;
+        letter-spacing:-1px;font-family:monospace">${fmt(rec.amountPaid)}</p>
     </div>
 
     <p style="margin:0 0 16px;color:#475569">Dear <strong>${client.companyName}</strong>,</p>
@@ -2710,9 +2838,12 @@ function emailReceiptHTML(rec, client) {
       emailDataRow("Amount Confirmed", fmt(rec.amountPaid), true),
     ])}
 
+    ${deliverablesBlock}
+
     ${emailDivider()}
     <p style="margin:0;font-size:13px;color:#94a3b8">
-      Please keep this email as your payment record. Contact us at ${agencySettings.email || agency} for any queries.
+      Please keep this email as your official payment record.<br>
+      Contact us at ${agencySettings.email || agency}${agencySettings.phone ? " · " + agencySettings.phone : ""} for any queries.
     </p>
   `);
 }
@@ -2761,37 +2892,59 @@ function emailQuoteHTML(qt, client) {
 }
 
 // ── Welcome email (new client account) ───────────────────
-function emailWelcomeHTML(clientData, loginEmail) {
-  const agency  = agencySettings.agencyName || "Counterpane";
+function emailWelcomeHTML(clientData, loginEmail, loginPassword) {
+  const agency     = agencySettings.agencyName || "Counterpane";
+  const portalUrl  = agencySettings.portalUrl  || "";
   return emailBaseHTML(`
     <h2 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a;letter-spacing:-.3px">
       Welcome to ${agency}</h2>
 
     <p style="margin:0 0 16px;color:#475569">Dear <strong>${clientData.companyName}</strong>,</p>
     <p style="margin:0 0 24px;color:#475569">
-      Your client portal account has been created. You can log in to view your invoices, 
-      receipts, quotes, and project updates.</p>
+      Your client portal account has been created. Use the credentials below to log in and 
+      view your invoices, receipts, quotes, and project updates.</p>
 
-    <div style="background:#f0fdf4;border:1px solid #dcfce7;border-radius:10px;padding:20px;margin-bottom:24px">
-      <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#16a34a;text-transform:uppercase;letter-spacing:.5px">Your Login Details</p>
-      <p style="margin:0 0 6px;font-size:14px;color:#0f172a">
-        <strong>Email:</strong> ${loginEmail}</p>
-      <p style="margin:0;font-size:13px;color:#64748b">
-        Your password was provided by your account manager. You can change it after logging in 
-        under <em>Change Password</em> in the portal.</p>
+    <div style="background:#f0fdf4;border:2px solid #16a34a;border-radius:10px;padding:20px;margin-bottom:24px">
+      <p style="margin:0 0 14px;font-size:13px;font-weight:700;color:#16a34a;text-transform:uppercase;
+        letter-spacing:.5px">Your Login Credentials</p>
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="padding:6px 0;font-size:13px;color:#64748b;width:100px">Login Email</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:700;color:#0f172a;font-family:monospace">
+            ${loginEmail}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;font-size:13px;color:#64748b">Password</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:700;color:#0f172a;font-family:monospace">
+            ${loginPassword || "(provided separately)"}</td>
+        </tr>
+      </table>
+      <p style="margin:14px 0 0;font-size:12px;color:#64748b">
+        ⚠️ For security, please change your password after your first login using the 
+        <em>Change Password</em> option in the portal menu.</p>
     </div>
+
+    ${portalUrl ? `
+    <div style="text-align:center;margin-bottom:24px">
+      <a href="${portalUrl}" style="display:inline-block;background:#16a34a;color:#ffffff;
+        font-size:15px;font-weight:600;padding:14px 32px;border-radius:8px;
+        text-decoration:none;letter-spacing:-.1px">
+        → Log In to Your Portal
+      </a>
+      <p style="margin:10px 0 0;font-size:12px;color:#94a3b8">${portalUrl}</p>
+    </div>` : ""}
 
     <p style="margin:0 0 8px;font-size:14px;color:#475569">Through your portal you can:</p>
     <ul style="margin:0 0 24px;padding-left:20px;color:#475569;font-size:14px;line-height:1.8">
       <li>Download invoices and receipts as PDFs</li>
-      <li>View quotes and project progress</li>
+      <li>View quotes and project milestones</li>
       <li>Access your project files on Google Drive</li>
-      <li>Track your payment history</li>
+      <li>Track your full payment history</li>
     </ul>
 
     ${emailDivider()}
     <p style="margin:0;font-size:13px;color:#94a3b8">
-      Need help? Contact us at ${agencySettings.email || agency}.
+      Need help? Contact us at ${agencySettings.email || agency}${agencySettings.phone ? "  ·  " + agencySettings.phone : ""}.
     </p>
   `);
 }
